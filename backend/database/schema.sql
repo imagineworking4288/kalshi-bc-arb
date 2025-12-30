@@ -1,0 +1,72 @@
+-- Paper trading account (single row)
+CREATE TABLE IF NOT EXISTS paper_account (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    balance REAL NOT NULL DEFAULT 10000.00,
+    starting_balance REAL NOT NULL DEFAULT 10000.00,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT OR IGNORE INTO paper_account (id, balance, starting_balance) VALUES (1, 10000.00, 10000.00);
+
+-- Paper positions
+CREATE TABLE IF NOT EXISTS paper_positions (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMP NOT NULL,
+    ticker TEXT NOT NULL,
+    side TEXT NOT NULL CHECK (side IN ('yes', 'no')),
+    contracts INTEGER NOT NULL CHECK (contracts > 0),
+    avg_price REAL NOT NULL,
+    total_cost REAL NOT NULL,
+    total_fees REAL NOT NULL,
+    settlement_time TIMESTAMP NOT NULL,
+    settled INTEGER NOT NULL DEFAULT 0,
+    settled_at TIMESTAMP,
+    settlement_value REAL,
+    realized_pnl REAL,
+    trade_id TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_positions_settled ON paper_positions(settled);
+CREATE INDEX IF NOT EXISTS idx_positions_trade ON paper_positions(trade_id);
+
+-- Paper trades (groups of positions from one arbitrage execution)
+CREATE TABLE IF NOT EXISTS paper_trades (
+    id TEXT PRIMARY KEY,
+    executed_at TIMESTAMP NOT NULL,
+    asset TEXT NOT NULL,
+    total_cost REAL NOT NULL,
+    total_fees REAL NOT NULL,
+    contracts_per_leg INTEGER NOT NULL,
+    expected_payout REAL NOT NULL,
+    expected_profit REAL NOT NULL,
+    expected_profit_pct REAL NOT NULL,
+    actual_payout REAL,
+    actual_profit REAL,
+    legs_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'settled', 'partial'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_trades_status ON paper_trades(status);
+CREATE INDEX IF NOT EXISTS idx_trades_date ON paper_trades(executed_at);
+
+-- Opportunity history (for analytics)
+CREATE TABLE IF NOT EXISTS opportunity_history (
+    id TEXT PRIMARY KEY,
+    detected_at TIMESTAMP NOT NULL,
+    asset TEXT NOT NULL,
+    settlement_time TIMESTAMP NOT NULL,
+    threshold_ticker TEXT NOT NULL,
+    threshold_strike REAL NOT NULL,
+    threshold_yes_price REAL NOT NULL,
+    implied_price REAL NOT NULL,
+    divergence REAL NOT NULL,
+    net_profit_pct REAL NOT NULL,
+    max_liquidity_usd REAL NOT NULL,
+    bracket_count INTEGER NOT NULL,
+    was_traded INTEGER NOT NULL DEFAULT 0,
+    trade_id TEXT,
+    trade_mode TEXT CHECK (trade_mode IS NULL OR trade_mode IN ('paper', 'live'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_opp_date ON opportunity_history(detected_at);
