@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 
 
 class KalshiAuth:
-    """RSA-based authentication for Kalshi API"""
+    """RSA-based authentication for Kalshi API using PSS signatures"""
 
     def __init__(self, api_key_id: str, private_key_path: str):
         self.api_key_id = api_key_id
@@ -18,11 +18,18 @@ class KalshiAuth:
 
     def get_headers(self, method: str, path: str) -> dict:
         timestamp = str(int(datetime.now(timezone.utc).timestamp() * 1000))
-        message = f"{timestamp}{method.upper()}{path}"
 
+        # Strip query parameters from path before signing
+        path_without_query = path.split('?')[0]
+        message = f"{timestamp}{method.upper()}{path_without_query}"
+
+        # Use PSS padding (not PKCS1v15) as required by Kalshi
         signature = self.private_key.sign(
             message.encode(),
-            padding.PKCS1v15(),
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
             hashes.SHA256()
         )
 
