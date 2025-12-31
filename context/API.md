@@ -30,8 +30,8 @@ HTTP REST API endpoints for opportunities and trading
 | Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
 | get_config | - | dict | Return paper_mode, api_configured, starting balance |
-| get_spot_price | - | dict | Fetch BTC spot price from CF Benchmarks |
-| get_opportunities | min_profit: float = 1.0 | dict | Fetch markets, classify, detect arbitrage opportunities |
+| get_spot_price | - | dict | Fetch BTC spot price from CoinGecko/CoinLore with source attribution |
+| get_opportunities | min_profit: float = 1.0 | dict | Fetch events with nested markets, classify, detect arbitrage opportunities |
 | get_balance | - | dict | Get account balance (paper or live) |
 | get_positions | - | dict | Get open positions with paper_mode flag |
 | execute_arbitrage | request: ExecuteRequest | dict | Execute arbitrage trade by opportunity ID |
@@ -120,7 +120,7 @@ Classify Kalshi markets as threshold or bracket type
 
 | Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
-| MarketClassifier.classify | market: dict | Tuple[MarketType, dict] | Parse market title, return type and extracted data |
+| MarketClassifier.classify | market: dict | Tuple[MarketType, dict] | Parse market subtitle/title, return type and extracted data |
 
 ### arbitrage_detector.py
 Detect arbitrage opportunities between threshold and bracket markets

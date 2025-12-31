@@ -64,27 +64,46 @@ async def get_opportunities(
 ):
     global _opp_cache
 
-    # Fetch markets
+    # Fetch BTC events with nested markets (KXBTC = bracket ranges, KXBTCD = daily price)
+    all_markets = []
     try:
-        markets = await kalshi.get_markets()
+        for series in ["KXBTC", "KXBTCD"]:
+            events = await kalshi.get_events(
+                series_ticker=series,
+                status="open",
+                with_nested_markets=True,
+                limit=10
+            )
+
+            # Extract nested markets from each event
+            for event in events:
+                markets = event.get("markets", [])
+                settlement_str = event.get("strike_date") or event.get("close_time")
+                mutually_exclusive = event.get("mutually_exclusive", False)
+
+                # Add event metadata to each market
+                for market in markets:
+                    market["_event_settlement"] = settlement_str
+                    market["_mutually_exclusive"] = mutually_exclusive
+                    all_markets.append(market)
     except Exception as e:
-        raise HTTPException(503, f"Failed to fetch markets: {e}")
+        raise HTTPException(503, f"Failed to fetch events: {e}")
 
     # Classify and group
     groups: dict[str, MarketGroup] = {}
 
-    for market in markets:
+    for market in all_markets:
         market_type, data = classifier.classify(market)
         if not market_type:
             continue
 
-        # Parse settlement time
-        close_time = market.get("close_time") or market.get("expiration_time")
-        if not close_time:
+        # Use event settlement time if available, fallback to market close_time
+        settlement_str = market.get("_event_settlement") or market.get("close_time") or market.get("expiration_time")
+        if not settlement_str:
             continue
 
         try:
-            settlement = datetime.fromisoformat(close_time.replace("Z", "+00:00"))
+            settlement = datetime.fromisoformat(settlement_str.replace("Z", "+00:00"))
         except:
             continue
 
@@ -92,19 +111,18 @@ async def get_opportunities(
         if settlement < datetime.now(timezone.utc):
             continue
 
+        # Only use mutually exclusive events for bracket arbitrage
+        if market_type == MarketType.BRACKET and not market.get("_mutually_exclusive", False):
+            continue
+
         group_key = f"BTC_{settlement.isoformat()}"
         if group_key not in groups:
             groups[group_key] = MarketGroup(asset="BTC", settlement_time=settlement)
 
-        # Get orderbook for pricing
-        try:
-            orderbook = await kalshi.get_orderbook(market["ticker"])
-            yes_book = orderbook.get("yes", [])
-            yes_price = yes_book[0][0] / 100 if yes_book else 0.5
-            yes_ask = yes_price
-        except:
-            yes_price = 0.5
-            yes_ask = 0.5
+        # Use yes_ask from market data (already in cents)
+        yes_ask_cents = market.get("yes_ask", 50)
+        yes_price = yes_ask_cents / 100
+        yes_ask = yes_price
 
         if market_type == MarketType.THRESHOLD:
             groups[group_key].thresholds.append(ThresholdMarket(

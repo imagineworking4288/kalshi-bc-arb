@@ -10,7 +10,11 @@
       "Bash(python test_spot.py:*)",
       "Skill(update-context)",
       "Skill(update-context:*)",
-      "Bash(python test_api_improvements.py:*)"
+      "Bash(python test_api_improvements.py:*)",
+      "Bash(python diagnose_arbitrage.py:*)",
+      "Bash(python test_opportunities.py:*)",
+      "Bash(python:*)",
+      "Bash(../venv/Scripts/python.exe -c \"import sys; sys.path.insert\\(0, ''..''\\); from backend.api.routes import get_opportunities; import asyncio; result = asyncio.run\\(get_opportunities\\(min_profit=0.1\\)\\); print\\(f''Opportunities: {result[\"\"count\"\"]}''\\); print\\(f''Paper mode: {result[\"\"paper_mode\"\"]}''\\); print\\(f''Groups processed: {len\\(result[\"\"opportunities\"\"]\\)}''\\)\")"
     ]
   }
 }
