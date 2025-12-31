@@ -41,4 +41,43 @@ export const api = {
   getPaperSummary: () => fetchJson<any>('/paper/summary'),
 
   getPaperTrades: (limit = 50) => fetchJson<{ trades: any[] }>(`/paper/trades?limit=${limit}`),
+
+  // Manual Trading
+  placeTrade: (params: {
+    ticker: string;
+    side: 'yes' | 'no';
+    action: 'buy' | 'sell';
+    count: number;
+    price_cents: number;
+    modes: ('paper' | 'live')[];
+  }) =>
+    fetchJson<{
+      results: Array<{
+        mode: string;
+        order_id: string;
+        status: string;
+        error?: string;
+      }>;
+      success: boolean;
+      message: string;
+    }>('/trade/place', {
+      method: 'POST',
+      body: JSON.stringify(params)
+    }),
+
+  getMarketDetails: (ticker: string) =>
+    fetchJson<{
+      ticker: string;
+      title: string;
+      subtitle: string;
+      status: string;
+      yes_ask: number;
+      no_ask: number;
+      yes_bid: number;
+      no_bid: number;
+      volume: number;
+      open_interest: number;
+      close_time: string;
+      expiration_time: string;
+    }>(`/trade/market/${ticker}`),
 };

@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import datetime, timezone
 
 from ..config import get_settings
-from ..models.schemas import ExecuteRequest, ResetRequest
+from ..models.schemas import ExecuteRequest, ResetRequest, TradeRequest
 from ..services import (
     KalshiClient,
     SpotPriceClient,
@@ -251,3 +251,207 @@ async def paper_trades(limit: int = 50):
 @router.post("/paper/settle/{position_id}")
 async def settle_position(position_id: str, won: bool = True):
     return await paper.settle_position(position_id, won)
+
+
+# ============== MANUAL TRADING ==============
+
+@router.post("/trade/place")
+async def place_trade(request: TradeRequest):
+    """
+    Place a manual trade in paper mode, live mode, or both simultaneously.
+    """
+    import uuid
+    from ..database.connection import get_db
+    from ..services.fee_calculator import calculate_fee
+
+    results = []
+
+    for mode in request.modes:
+        order_id = str(uuid.uuid4())
+
+        try:
+            if mode == "paper":
+                # Execute paper trade
+                db = await get_db()
+
+                # Get paper account balance
+                balance_row = await db.fetchone("SELECT balance FROM paper_account WHERE id = 1")
+                if not balance_row:
+                    results.append({
+                        "mode": "paper",
+                        "order_id": order_id,
+                        "status": "failed",
+                        "error": "Paper account not initialized"
+                    })
+                    continue
+
+                # Calculate cost
+                price_dollars = request.price_cents / 100
+                total_cost = request.count * price_dollars
+                total_fees = calculate_fee(request.count, price_dollars)
+                total_debit = total_cost + total_fees
+
+                current_balance = balance_row[0]
+                if current_balance < total_debit:
+                    results.append({
+                        "mode": "paper",
+                        "order_id": order_id,
+                        "status": "failed",
+                        "error": f"Insufficient balance: ${current_balance:.2f} < ${total_debit:.2f}"
+                    })
+                    continue
+
+                # Record order
+                now = datetime.now(timezone.utc).isoformat()
+                await db.execute(
+                    """INSERT INTO manual_orders
+                       (id, created_at, ticker, side, action, count, price_cents, mode, status,
+                        filled_count, avg_fill_price, total_cost, total_fees, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (order_id, now, request.ticker, request.side, request.action, request.count,
+                     request.price_cents, "paper", "filled", request.count, price_dollars,
+                     total_cost, total_fees, now)
+                )
+
+                # Create position
+                position_id = str(uuid.uuid4())
+                await db.execute(
+                    """INSERT INTO paper_positions
+                       (id, created_at, ticker, side, contracts, avg_price, total_cost, total_fees,
+                        settlement_time, settled, trade_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (position_id, now, request.ticker, request.side, request.count, price_dollars,
+                     total_cost, total_fees, datetime.now(timezone.utc).isoformat(), 0, order_id)
+                )
+
+                # Update balance
+                new_balance = current_balance - total_debit
+                await db.execute(
+                    "UPDATE paper_account SET balance = ?, updated_at = ? WHERE id = 1",
+                    (new_balance, now)
+                )
+
+                await db.commit()
+
+                results.append({
+                    "mode": "paper",
+                    "order_id": order_id,
+                    "status": "filled",
+                    "filled_count": request.count,
+                    "avg_fill_price": price_dollars,
+                    "total_cost": total_cost,
+                    "total_fees": total_fees
+                })
+
+            elif mode == "live":
+                # Execute live trade via Kalshi API
+                try:
+                    kalshi_result = await kalshi.place_order(
+                        ticker=request.ticker,
+                        side=request.side,
+                        action=request.action,
+                        count=request.count,
+                        price=request.price_cents
+                    )
+
+                    # Parse Kalshi response
+                    order = kalshi_result.get("order", {})
+                    kalshi_order_id = order.get("order_id")
+                    filled_count = order.get("filled_count", 0)
+                    status_map = {"resting": "pending", "filled": "filled", "canceled": "cancelled"}
+                    status = status_map.get(order.get("status", "pending"), "pending")
+
+                    # Calculate actuals
+                    fill_price = order.get("yes_price", request.price_cents) / 100
+                    actual_cost = filled_count * fill_price
+                    actual_fees = order.get("total_fee", 0) / 100
+
+                    # Record order
+                    db = await get_db()
+                    now = datetime.now(timezone.utc).isoformat()
+                    await db.execute(
+                        """INSERT INTO manual_orders
+                           (id, created_at, ticker, side, action, count, price_cents, mode, status,
+                            filled_count, avg_fill_price, total_cost, total_fees, kalshi_order_id, updated_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (order_id, now, request.ticker, request.side, request.action, request.count,
+                         request.price_cents, "live", status, filled_count, fill_price,
+                         actual_cost, actual_fees, kalshi_order_id, now)
+                    )
+                    await db.commit()
+
+                    results.append({
+                        "mode": "live",
+                        "order_id": order_id,
+                        "kalshi_order_id": kalshi_order_id,
+                        "status": status,
+                        "filled_count": filled_count,
+                        "avg_fill_price": fill_price,
+                        "total_cost": actual_cost,
+                        "total_fees": actual_fees
+                    })
+
+                except Exception as e:
+                    # Record failed live order
+                    db = await get_db()
+                    now = datetime.now(timezone.utc).isoformat()
+                    await db.execute(
+                        """INSERT INTO manual_orders
+                           (id, created_at, ticker, side, action, count, price_cents, mode, status, error, updated_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (order_id, now, request.ticker, request.side, request.action, request.count,
+                         request.price_cents, "live", "failed", str(e), now)
+                    )
+                    await db.commit()
+
+                    results.append({
+                        "mode": "live",
+                        "order_id": order_id,
+                        "status": "failed",
+                        "error": str(e)
+                    })
+
+        except Exception as e:
+            results.append({
+                "mode": mode,
+                "order_id": order_id,
+                "status": "failed",
+                "error": str(e)
+            })
+
+    success = all(r["status"] in ["filled", "pending"] for r in results)
+    message = f"Placed {len([r for r in results if r['status'] in ['filled', 'pending']])} of {len(results)} orders"
+
+    return {
+        "results": results,
+        "success": success,
+        "message": message
+    }
+
+
+@router.get("/trade/market/{ticker}")
+async def get_market_details(ticker: str):
+    """Fetch full market details from Kalshi API."""
+    try:
+        market = await kalshi.get_market(ticker)
+        if not market:
+            raise HTTPException(404, f"Market {ticker} not found")
+
+        return {
+            "ticker": market.get("ticker"),
+            "title": market.get("title"),
+            "subtitle": market.get("subtitle"),
+            "status": market.get("status"),
+            "yes_ask": market.get("yes_ask"),
+            "no_ask": market.get("no_ask"),
+            "yes_bid": market.get("yes_bid"),
+            "no_bid": market.get("no_bid"),
+            "volume": market.get("volume", 0),
+            "open_interest": market.get("open_interest", 0),
+            "close_time": market.get("close_time"),
+            "expiration_time": market.get("expiration_time")
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Failed to fetch market: {str(e)}")

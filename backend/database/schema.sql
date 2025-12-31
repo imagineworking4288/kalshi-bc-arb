@@ -70,3 +70,27 @@ CREATE TABLE IF NOT EXISTS opportunity_history (
 );
 
 CREATE INDEX IF NOT EXISTS idx_opp_date ON opportunity_history(detected_at);
+
+-- Manual orders (both paper and live mode)
+CREATE TABLE IF NOT EXISTS manual_orders (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ticker TEXT NOT NULL,
+    side TEXT NOT NULL CHECK (side IN ('yes', 'no')),
+    action TEXT NOT NULL CHECK (action IN ('buy', 'sell')),
+    count INTEGER NOT NULL CHECK (count > 0),
+    price_cents INTEGER NOT NULL CHECK (price_cents >= 1 AND price_cents <= 99),
+    mode TEXT NOT NULL CHECK (mode IN ('paper', 'live')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'filled', 'partial', 'cancelled', 'failed')),
+    filled_count INTEGER DEFAULT 0,
+    avg_fill_price REAL,
+    total_cost REAL,
+    total_fees REAL,
+    kalshi_order_id TEXT,
+    error TEXT,
+    updated_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_mode ON manual_orders(mode);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON manual_orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_created ON manual_orders(created_at);

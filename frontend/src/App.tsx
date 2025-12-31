@@ -4,10 +4,11 @@ import { TabNav } from './components/layout/TabNav';
 import { OpportunitiesTab } from './components/opportunities/OpportunitiesTab';
 import { TradingTab } from './components/trading/TradingTab';
 import { AnalyticsTab } from './components/analytics/AnalyticsTab';
+import { TradeTab } from './components/trade/TradeTab';
 import { useTradingStore } from './stores/tradingStore';
 import { api } from './services/api';
 
-type Tab = 'opportunities' | 'trading' | 'analytics';
+type Tab = 'opportunities' | 'trading' | 'analytics' | 'trade';
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('opportunities');
@@ -39,6 +40,7 @@ function App() {
         {activeTab === 'opportunities' && <OpportunitiesTab />}
         {activeTab === 'trading' && <TradingTab />}
         {activeTab === 'analytics' && <AnalyticsTab />}
+        {activeTab === 'trade' && <TradeTab />}
       </main>
     </div>
   );

@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 
-type Tab = 'opportunities' | 'trading' | 'analytics';
+type Tab = 'opportunities' | 'trading' | 'analytics' | 'trade';
 
 interface Props {
   activeTab: Tab;
@@ -10,6 +10,7 @@ interface Props {
 export function TabNav({ activeTab, onTabChange }: Props) {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'opportunities', label: 'Opportunities' },
+    { id: 'trade', label: 'Trade (MVP)' },
     { id: 'trading', label: 'Trading' },
     { id: 'analytics', label: 'Analytics' },
   ];
