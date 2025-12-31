@@ -200,6 +200,19 @@ Root application component with tab navigation
 
 ---
 
+## frontend/src/hooks/
+
+### useSpotPrice.ts
+Live BTC spot price polling with source attribution
+
+| Function/Type | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| SpotPriceData | price, source, timestamp, isLive | interface | Spot price data with freshness indicator |
+| UseSpotPriceResult | data, error, isLoading, refresh | interface | Hook return type |
+| useSpotPrice | - | UseSpotPriceResult | Poll spot price every 15s, handle staleness |
+
+---
+
 ## frontend/src/services/
 
 ### api.ts
@@ -209,7 +222,7 @@ Backend HTTP API client
 |----------|--------|---------|-------------|
 | fetchJson | url: string, options?: RequestInit | Promise<T> | Fetch JSON with error handling |
 | api.getConfig | - | Promise<{paper_mode, api_configured}> | Get backend configuration |
-| api.getSpotPrice | - | Promise<{asset, price}> | Get current BTC spot price |
+| api.getSpotPrice | - | Promise<{asset, price, timestamp, source}> | Get current BTC spot price with source |
 | api.getOpportunities | minProfit?: number | Promise<{opportunities, count}> | Get arbitrage opportunities |
 | api.getBalance | - | Promise<Balance> | Get account balance |
 | api.getPositions | - | Promise<{positions}> | Get open positions |
@@ -270,11 +283,12 @@ Formatting utility functions
 ## frontend/src/components/layout/
 
 ### Header.tsx
-Application header with trading mode and balance
+Application header with live spot price indicator
 
 | Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
-| Header | - | JSX.Element | Display title, mode badge, BTC price, balance |
+| LiveIndicator | isLive: boolean | JSX.Element | Green pulse dot when live, yellow when stale |
+| Header | - | JSX.Element | Display title, mode badge, live BTC price, balance |
 
 ### TabNav.tsx
 Tab navigation for main sections

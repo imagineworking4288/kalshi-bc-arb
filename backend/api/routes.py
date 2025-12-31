@@ -49,7 +49,12 @@ async def get_config():
 async def get_spot_price():
     price = await spot_client.get_price("BTC")
     if price:
-        return {"asset": price.asset, "price": price.price, "timestamp": price.timestamp.isoformat()}
+        return {
+            "asset": price.asset,
+            "price": price.price,
+            "timestamp": price.timestamp.isoformat(),
+            "source": price.source
+        }
     raise HTTPException(503, "Spot price unavailable")
 
 

@@ -43,6 +43,7 @@ Automated trading bot that detects and executes arbitrage opportunities on Kalsh
 | frontend/components/layout | frontend/src/components/layout/ | Header and navigation |
 | frontend/components/opportunities | frontend/src/components/opportunities/ | Arbitrage opportunity display and execution |
 | frontend/components/trading | frontend/src/components/trading/ | Trading mode and position management |
+| frontend/hooks | frontend/src/hooks/ | Custom React hooks |
 | frontend/services | frontend/src/services/ | Backend API client |
 | frontend/stores | frontend/src/stores/ | Zustand state management |
 | frontend/types | frontend/src/types/ | TypeScript type definitions |
@@ -115,6 +116,7 @@ Automated trading bot that detects and executes arbitrage opportunities on Kalsh
 | frontend/src/components/trading/PositionList.tsx | Open positions display |
 | frontend/src/components/trading/TradeHistory.tsx | Historical trades list |
 | frontend/src/components/trading/TradingTab.tsx | Trading dashboard view |
+| frontend/src/hooks/useSpotPrice.ts | Live BTC price polling hook |
 | frontend/src/services/api.ts | Backend HTTP API client |
 | frontend/src/stores/opportunityStore.ts | Opportunities Zustand store |
 | frontend/src/stores/tradingStore.ts | Trading state Zustand store |

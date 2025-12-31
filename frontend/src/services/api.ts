@@ -15,7 +15,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 export const api = {
   getConfig: () => fetchJson<{ paper_mode: boolean; api_configured: boolean }>('/config'),
 
-  getSpotPrice: () => fetchJson<{ asset: string; price: number }>('/spot-price'),
+  getSpotPrice: () => fetchJson<{ asset: string; price: number; timestamp: string; source: string }>('/spot-price'),
 
   getOpportunities: (minProfit = 1.0) =>
     fetchJson<{ opportunities: any[]; count: number; paper_mode: boolean }>(

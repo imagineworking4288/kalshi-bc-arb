@@ -225,6 +225,28 @@
 
 ---
 
+## Frontend Hook Types (frontend/src/hooks/useSpotPrice.ts)
+
+### SpotPriceData
+
+| Field | Type | Description |
+|-------|------|-------------|
+| price | number | Current spot price in USD |
+| source | string | API source ("CoinGecko", "CoinLore") |
+| timestamp | string | ISO timestamp of price fetch |
+| isLive | boolean | True if data is fresh (<60s old) |
+
+### UseSpotPriceResult
+
+| Field | Type | Description |
+|-------|------|-------------|
+| data | SpotPriceData \| null | Current price data or null |
+| error | string \| null | Error message if fetch failed |
+| isLoading | boolean | True during initial fetch |
+| refresh | () => void | Manual refresh function |
+
+---
+
 ## Frontend Types (frontend/src/types/index.ts)
 
 ### TradingMode

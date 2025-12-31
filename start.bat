@@ -12,7 +12,6 @@ timeout /t 2 /nobreak >nul
 :: Start frontend in new terminal
 echo Starting frontend dev server...
 start "Kalshi Frontend" cmd /k "cd /d C:\Projects\kalshi-bc-arb\frontend && npm run dev"
-
 echo.
 echo Both servers starting...
 echo Backend: http://localhost:8000
