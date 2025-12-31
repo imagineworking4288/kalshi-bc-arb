@@ -80,4 +80,79 @@ export const api = {
       close_time: string;
       expiration_time: string;
     }>(`/trade/market/${ticker}`),
+
+  // Portfolio
+  getPortfolioSummary: () =>
+    fetchJson<{
+      paper_balance: number;
+      live_balance: number;
+      paper_positions_count: number;
+      live_positions_count: number;
+    }>('/portfolio/summary'),
+
+  getPortfolioPositions: () =>
+    fetchJson<{
+      positions: Array<{
+        ticker: string;
+        side: string;
+        contracts: number;
+        avg_price: number;
+        total_cost: number;
+        mode: string;
+        created_at: string;
+      }>;
+    }>('/portfolio/positions'),
+
+  getPortfolioOrders: (mode?: string, limit = 50) => {
+    const params = new URLSearchParams();
+    if (mode) params.append('mode', mode);
+    params.append('limit', limit.toString());
+    return fetchJson<{
+      orders: Array<{
+        id: string;
+        ticker: string;
+        side: string;
+        action: string;
+        count: number;
+        price_cents: number;
+        mode: string;
+        status: string;
+        created_at: string;
+      }>;
+    }>(`/portfolio/orders?${params}`);
+  },
+
+  // Watchlist
+  getWatchlist: () =>
+    fetchJson<{
+      items: Array<{
+        id: string;
+        ticker: string;
+        title: string;
+        subtitle: string;
+        notes: string | null;
+        added_at: string;
+        yes_ask: number | null;
+        no_ask: number | null;
+        status: string;
+      }>;
+    }>('/watchlist'),
+
+  addToWatchlist: (ticker: string, notes?: string) =>
+    fetchJson<{
+      id: string;
+      ticker: string;
+      title: string;
+      subtitle: string;
+      notes: string | null;
+      already_existed: boolean;
+    }>('/watchlist', {
+      method: 'POST',
+      body: JSON.stringify({ ticker, notes })
+    }),
+
+  removeFromWatchlist: (ticker: string) =>
+    fetchJson<{ message: string }>(`/watchlist/${ticker}`, {
+      method: 'DELETE'
+    }),
 };

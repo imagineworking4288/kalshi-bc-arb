@@ -18,3 +18,8 @@ class TradeRequest(BaseModel):
     count: int
     price_cents: int  # 1-99
     modes: List[str]  # ['paper'], ['live'], or ['paper', 'live']
+
+
+class WatchlistAddRequest(BaseModel):
+    ticker: str
+    notes: Optional[str] = None

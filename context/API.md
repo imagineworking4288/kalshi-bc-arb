@@ -39,6 +39,14 @@ HTTP REST API endpoints for opportunities and trading
 | paper_summary | - | dict | Get paper trading P&L summary |
 | paper_trades | limit: int = 50 | dict | Get paper trade history |
 | settle_position | position_id: str, won: bool | dict | Manually settle paper position for testing |
+| place_trade | request: TradeRequest | dict | Execute manual trade in paper/live/both modes |
+| get_market_details | ticker: str | dict | Fetch market details from Kalshi API |
+| get_portfolio_summary | - | dict | Get portfolio summary across paper and live modes |
+| get_portfolio_positions | - | dict | Get all positions from paper and live modes |
+| get_portfolio_orders | mode?: str, limit: int = 50 | dict | Get manual order history with optional mode filter |
+| get_watchlist | - | dict | Get all watchlist items with fresh prices |
+| add_to_watchlist | request: WatchlistAddRequest | dict | Add market to watchlist |
+| remove_from_watchlist | ticker: str | dict | Remove market from watchlist |
 
 ### websocket.py
 WebSocket connection manager for real-time updates
@@ -168,6 +176,26 @@ Route trades to paper simulation or live Kalshi with atomic execution
 | TradeExecutor.get_positions | - | list | Get positions from paper or Kalshi |
 | TradeExecutor.execute_arbitrage | opportunity, num_contracts | Union[Paper,Live]TradeResult | Route to paper or live execution |
 | TradeExecutor._execute_live | opportunity, num_contracts | LiveTradeResult | Execute atomic batch orders on Kalshi |
+
+### portfolio_service.py
+Portfolio aggregation and order tracking across paper and live modes
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| PortfolioService | - | - | Initialize with Kalshi client for live data |
+| PortfolioService.get_summary | - | dict | Get paper/live balances and position counts |
+| PortfolioService.get_all_positions | - | List[dict] | Fetch positions from SQLite (paper) and Kalshi API (live) |
+| PortfolioService.get_orders | mode?: str, limit: int = 50 | List[dict] | Get manual order history with optional mode filtering |
+
+### watchlist_service.py
+Saved markets management with live price updates
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| WatchlistService | - | - | Initialize with Kalshi client for market fetching |
+| WatchlistService.add | ticker: str, notes?: str | dict | Fetch market details from Kalshi and save to database |
+| WatchlistService.remove | ticker: str | bool | Delete market from watchlist |
+| WatchlistService.get_all | - | List[dict] | Get all watchlist items with fresh prices from Kalshi |
 
 ---
 
@@ -384,6 +412,40 @@ Paper trading P&L analytics dashboard
 | Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
 | AnalyticsTab | - | JSX.Element | Display P&L summary cards and details |
+
+## frontend/src/components/portfolio/
+
+### PortfolioTab.tsx
+Portfolio overview with positions and order history
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| PortfolioTab | - | JSX.Element | Display portfolio summary, positions table, order history with mode filters |
+
+## frontend/src/components/trade/
+
+### TradeCard.tsx
+Manual trading market card interface
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| TradeCard | ticker: string | JSX.Element | Interactive market card with YES/NO prices, quantity input, mode selection, buy buttons |
+
+### TradeTab.tsx
+Manual trading tab wrapper
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| TradeTab | - | JSX.Element | Container for manual trading with hardcoded test market |
+
+## frontend/src/components/watchlist/
+
+### WatchlistTab.tsx
+Saved markets management with live prices
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| WatchlistTab | - | JSX.Element | Add markets form, saved markets list with live prices and remove functionality |
 
 ---
 

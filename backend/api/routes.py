@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import datetime, timezone
 
 from ..config import get_settings
-from ..models.schemas import ExecuteRequest, ResetRequest, TradeRequest
+from ..models.schemas import ExecuteRequest, ResetRequest, TradeRequest, WatchlistAddRequest
 from ..services import (
     KalshiClient,
     SpotPriceClient,
@@ -16,6 +16,8 @@ from ..services import (
     TradeExecutor,
     PaperTradingService
 )
+from ..services.portfolio_service import PortfolioService
+from ..services.watchlist_service import WatchlistService
 
 router = APIRouter()
 
@@ -26,6 +28,8 @@ classifier = MarketClassifier()
 detector = ArbitrageDetector()
 executor = TradeExecutor(kalshi)
 paper = PaperTradingService()
+portfolio_service = PortfolioService()
+watchlist_service = WatchlistService()
 
 # Cache for opportunities
 _opp_cache: dict = {}
@@ -261,7 +265,7 @@ async def place_trade(request: TradeRequest):
     Place a manual trade in paper mode, live mode, or both simultaneously.
     """
     import uuid
-    from ..database.connection import get_db
+    from ..database.connection import db
     from ..services.fee_calculator import calculate_fee
 
     results = []
@@ -272,76 +276,77 @@ async def place_trade(request: TradeRequest):
         try:
             if mode == "paper":
                 # Execute paper trade
-                db = await get_db()
+                async with db.connection() as conn:
+                    # Get paper account balance
+                    cursor = await conn.execute("SELECT balance FROM paper_account WHERE id = 1")
+                    balance_row = await cursor.fetchone()
 
-                # Get paper account balance
-                balance_row = await db.fetchone("SELECT balance FROM paper_account WHERE id = 1")
-                if not balance_row:
+                    if not balance_row:
+                        results.append({
+                            "mode": "paper",
+                            "order_id": order_id,
+                            "status": "failed",
+                            "error": "Paper account not initialized"
+                        })
+                        continue
+
+                    # Calculate cost
+                    price_dollars = request.price_cents / 100
+                    total_cost = request.count * price_dollars
+                    total_fees = calculate_fee(request.count, price_dollars)
+                    total_debit = total_cost + total_fees
+
+                    current_balance = balance_row[0]
+                    if current_balance < total_debit:
+                        results.append({
+                            "mode": "paper",
+                            "order_id": order_id,
+                            "status": "failed",
+                            "error": f"Insufficient balance: ${current_balance:.2f} < ${total_debit:.2f}"
+                        })
+                        continue
+
+                    # Record order
+                    now = datetime.now(timezone.utc).isoformat()
+                    await conn.execute(
+                        """INSERT INTO manual_orders
+                           (id, created_at, ticker, side, action, count, price_cents, mode, status,
+                            filled_count, avg_fill_price, total_cost, total_fees, updated_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (order_id, now, request.ticker, request.side, request.action, request.count,
+                         request.price_cents, "paper", "filled", request.count, price_dollars,
+                         total_cost, total_fees, now)
+                    )
+
+                    # Create position
+                    position_id = str(uuid.uuid4())
+                    await conn.execute(
+                        """INSERT INTO paper_positions
+                           (id, created_at, ticker, side, contracts, avg_price, total_cost, total_fees,
+                            settlement_time, settled, trade_id)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (position_id, now, request.ticker, request.side, request.count, price_dollars,
+                         total_cost, total_fees, datetime.now(timezone.utc).isoformat(), 0, order_id)
+                    )
+
+                    # Update balance
+                    new_balance = current_balance - total_debit
+                    await conn.execute(
+                        "UPDATE paper_account SET balance = ?, updated_at = ? WHERE id = 1",
+                        (new_balance, now)
+                    )
+
+                    await conn.commit()
+
                     results.append({
                         "mode": "paper",
                         "order_id": order_id,
-                        "status": "failed",
-                        "error": "Paper account not initialized"
+                        "status": "filled",
+                        "filled_count": request.count,
+                        "avg_fill_price": price_dollars,
+                        "total_cost": total_cost,
+                        "total_fees": total_fees
                     })
-                    continue
-
-                # Calculate cost
-                price_dollars = request.price_cents / 100
-                total_cost = request.count * price_dollars
-                total_fees = calculate_fee(request.count, price_dollars)
-                total_debit = total_cost + total_fees
-
-                current_balance = balance_row[0]
-                if current_balance < total_debit:
-                    results.append({
-                        "mode": "paper",
-                        "order_id": order_id,
-                        "status": "failed",
-                        "error": f"Insufficient balance: ${current_balance:.2f} < ${total_debit:.2f}"
-                    })
-                    continue
-
-                # Record order
-                now = datetime.now(timezone.utc).isoformat()
-                await db.execute(
-                    """INSERT INTO manual_orders
-                       (id, created_at, ticker, side, action, count, price_cents, mode, status,
-                        filled_count, avg_fill_price, total_cost, total_fees, updated_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (order_id, now, request.ticker, request.side, request.action, request.count,
-                     request.price_cents, "paper", "filled", request.count, price_dollars,
-                     total_cost, total_fees, now)
-                )
-
-                # Create position
-                position_id = str(uuid.uuid4())
-                await db.execute(
-                    """INSERT INTO paper_positions
-                       (id, created_at, ticker, side, contracts, avg_price, total_cost, total_fees,
-                        settlement_time, settled, trade_id)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (position_id, now, request.ticker, request.side, request.count, price_dollars,
-                     total_cost, total_fees, datetime.now(timezone.utc).isoformat(), 0, order_id)
-                )
-
-                # Update balance
-                new_balance = current_balance - total_debit
-                await db.execute(
-                    "UPDATE paper_account SET balance = ?, updated_at = ? WHERE id = 1",
-                    (new_balance, now)
-                )
-
-                await db.commit()
-
-                results.append({
-                    "mode": "paper",
-                    "order_id": order_id,
-                    "status": "filled",
-                    "filled_count": request.count,
-                    "avg_fill_price": price_dollars,
-                    "total_cost": total_cost,
-                    "total_fees": total_fees
-                })
 
             elif mode == "live":
                 # Execute live trade via Kalshi API
@@ -367,18 +372,18 @@ async def place_trade(request: TradeRequest):
                     actual_fees = order.get("total_fee", 0) / 100
 
                     # Record order
-                    db = await get_db()
-                    now = datetime.now(timezone.utc).isoformat()
-                    await db.execute(
-                        """INSERT INTO manual_orders
-                           (id, created_at, ticker, side, action, count, price_cents, mode, status,
-                            filled_count, avg_fill_price, total_cost, total_fees, kalshi_order_id, updated_at)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (order_id, now, request.ticker, request.side, request.action, request.count,
-                         request.price_cents, "live", status, filled_count, fill_price,
-                         actual_cost, actual_fees, kalshi_order_id, now)
-                    )
-                    await db.commit()
+                    async with db.connection() as conn:
+                        now = datetime.now(timezone.utc).isoformat()
+                        await conn.execute(
+                            """INSERT INTO manual_orders
+                               (id, created_at, ticker, side, action, count, price_cents, mode, status,
+                                filled_count, avg_fill_price, total_cost, total_fees, kalshi_order_id, updated_at)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                            (order_id, now, request.ticker, request.side, request.action, request.count,
+                             request.price_cents, "live", status, filled_count, fill_price,
+                             actual_cost, actual_fees, kalshi_order_id, now)
+                        )
+                        await conn.commit()
 
                     results.append({
                         "mode": "live",
@@ -393,16 +398,16 @@ async def place_trade(request: TradeRequest):
 
                 except Exception as e:
                     # Record failed live order
-                    db = await get_db()
-                    now = datetime.now(timezone.utc).isoformat()
-                    await db.execute(
-                        """INSERT INTO manual_orders
-                           (id, created_at, ticker, side, action, count, price_cents, mode, status, error, updated_at)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (order_id, now, request.ticker, request.side, request.action, request.count,
-                         request.price_cents, "live", "failed", str(e), now)
-                    )
-                    await db.commit()
+                    async with db.connection() as conn:
+                        now = datetime.now(timezone.utc).isoformat()
+                        await conn.execute(
+                            """INSERT INTO manual_orders
+                               (id, created_at, ticker, side, action, count, price_cents, mode, status, error, updated_at)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                            (order_id, now, request.ticker, request.side, request.action, request.count,
+                             request.price_cents, "live", "failed", str(e), now)
+                        )
+                        await conn.commit()
 
                     results.append({
                         "mode": "live",
@@ -455,3 +460,50 @@ async def get_market_details(ticker: str):
         raise
     except Exception as e:
         raise HTTPException(500, f"Failed to fetch market: {str(e)}")
+
+
+# ============== PORTFOLIO ==============
+
+@router.get("/portfolio/summary")
+async def get_portfolio_summary():
+    """Get portfolio summary across paper and live modes."""
+    return await portfolio_service.get_summary()
+
+
+@router.get("/portfolio/positions")
+async def get_portfolio_positions():
+    """Get all positions from paper and live modes."""
+    positions = await portfolio_service.get_all_positions()
+    return {"positions": positions}
+
+
+@router.get("/portfolio/orders")
+async def get_portfolio_orders(mode: Optional[str] = None, limit: int = 50):
+    """Get manual order history."""
+    orders = await portfolio_service.get_orders(mode, limit)
+    return {"orders": orders}
+
+
+# ============== WATCHLIST ==============
+
+@router.get("/watchlist")
+async def get_watchlist():
+    """Get all watchlist items with fresh prices."""
+    items = await watchlist_service.get_all()
+    return {"items": items}
+
+
+@router.post("/watchlist")
+async def add_to_watchlist(request: WatchlistAddRequest):
+    """Add market to watchlist."""
+    result = await watchlist_service.add(request.ticker, request.notes)
+    return result
+
+
+@router.delete("/watchlist/{ticker}")
+async def remove_from_watchlist(ticker: str):
+    """Remove market from watchlist."""
+    success = await watchlist_service.remove(ticker)
+    if not success:
+        raise HTTPException(404, f"Market {ticker} not in watchlist")
+    return {"message": f"Removed {ticker} from watchlist"}

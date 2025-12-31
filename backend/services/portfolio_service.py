@@ -1,0 +1,144 @@
+"""
+Portfolio Service - Unified view of paper + live positions
+"""
+import logging
+from typing import List, Dict, Any, Optional
+
+from ..database.connection import db
+from ..config import get_settings
+from .kalshi_client import KalshiClient
+
+logger = logging.getLogger(__name__)
+
+
+class PortfolioService:
+    def __init__(self):
+        self.settings = get_settings()
+        self.kalshi_client = KalshiClient()
+
+    async def get_summary(self) -> Dict[str, Any]:
+        """Get portfolio summary across paper and live."""
+        summary = {
+            "paper_balance": 0,
+            "live_balance": 0,
+            "paper_positions_count": 0,
+            "live_positions_count": 0,
+            "paper_positions_value": 0,
+            "live_positions_value": 0,
+        }
+
+        # Paper balance
+        async with db.connection() as conn:
+            cursor = await conn.execute("SELECT balance FROM paper_account WHERE id = 1")
+            row = await cursor.fetchone()
+            summary["paper_balance"] = row[0] if row else 0
+
+            # Paper positions count
+            cursor = await conn.execute("SELECT COUNT(*) FROM paper_positions WHERE settled = 0")
+            row = await cursor.fetchone()
+            summary["paper_positions_count"] = row[0] if row else 0
+
+        # Live balance from Kalshi
+        try:
+            live_balance = await self.kalshi_client.get_balance()
+            summary["live_balance"] = live_balance.get("balance", 0)
+        except Exception as e:
+            logger.warning(f"Could not fetch live balance: {e}")
+
+        # Live positions count
+        try:
+            live_positions = await self.kalshi_client.get_positions()
+            summary["live_positions_count"] = len(live_positions)
+        except Exception as e:
+            logger.warning(f"Could not fetch live positions: {e}")
+
+        return summary
+
+    async def get_all_positions(self) -> List[Dict[str, Any]]:
+        """Get all positions from both paper and live."""
+        positions = []
+
+        # Paper positions
+        async with db.connection() as conn:
+            cursor = await conn.execute("""
+                SELECT ticker, side, contracts, avg_price, total_cost, total_fees
+                FROM paper_positions
+                WHERE settled = 0 AND contracts > 0
+            """)
+            rows = await cursor.fetchall()
+
+            for row in rows:
+                positions.append({
+                    "mode": "paper",
+                    "ticker": row[0],
+                    "side": row[1],
+                    "contracts": row[2],
+                    "avg_price_cents": int(row[3] * 100) if row[3] else 0,
+                    "total_cost_cents": int(row[4] * 100) if row[4] else 0,
+                    "fees_cents": int(row[5] * 100) if row[5] else 0,
+                })
+
+        # Live positions from Kalshi
+        try:
+            live_positions = await self.kalshi_client.get_positions()
+            for pos in live_positions:
+                # Kalshi returns position as positive (YES) or negative (NO)
+                position_count = pos.get("position", 0)
+                side = "yes" if position_count > 0 else "no"
+
+                positions.append({
+                    "mode": "live",
+                    "ticker": pos.get("ticker", ""),
+                    "side": side,
+                    "contracts": abs(position_count),
+                    "avg_price_cents": pos.get("market_exposure", 0) // abs(position_count) if position_count else 0,
+                    "total_cost_cents": pos.get("market_exposure", 0),
+                    "fees_cents": pos.get("fees_paid", 0),
+                    "realized_pnl_cents": pos.get("realized_pnl", 0),
+                })
+        except Exception as e:
+            logger.warning(f"Could not fetch live positions: {e}")
+
+        return positions
+
+    async def get_orders(self, mode: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+        """Get recent orders from manual_orders table."""
+        async with db.connection() as conn:
+            if mode:
+                cursor = await conn.execute("""
+                    SELECT id, created_at, ticker, side, action, count,
+                           price_cents, mode, status, filled_count, total_cost, total_fees
+                    FROM manual_orders
+                    WHERE mode = ?
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                """, (mode, limit))
+            else:
+                cursor = await conn.execute("""
+                    SELECT id, created_at, ticker, side, action, count,
+                           price_cents, mode, status, filled_count, total_cost, total_fees
+                    FROM manual_orders
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                """, (limit,))
+
+            rows = await cursor.fetchall()
+
+            orders = []
+            for row in rows:
+                orders.append({
+                    "id": row[0],
+                    "created_at": row[1],
+                    "ticker": row[2],
+                    "side": row[3],
+                    "action": row[4],
+                    "count": row[5],
+                    "price_cents": row[6],
+                    "mode": row[7],
+                    "status": row[8],
+                    "filled_count": row[9],
+                    "total_cost_cents": int((row[10] or 0) * 100),
+                    "fee_cents": int((row[11] or 0) * 100),
+                })
+
+            return orders

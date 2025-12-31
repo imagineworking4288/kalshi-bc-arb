@@ -94,3 +94,16 @@ CREATE TABLE IF NOT EXISTS manual_orders (
 CREATE INDEX IF NOT EXISTS idx_orders_mode ON manual_orders(mode);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON manual_orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON manual_orders(created_at);
+
+-- Watchlist (saved markets for quick access)
+CREATE TABLE IF NOT EXISTS watchlist (
+    id TEXT PRIMARY KEY,
+    ticker TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    subtitle TEXT,
+    notes TEXT,
+    added_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_watchlist_ticker ON watchlist(ticker);
+CREATE INDEX IF NOT EXISTS idx_watchlist_added ON watchlist(added_at);

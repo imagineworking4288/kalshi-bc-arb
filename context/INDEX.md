@@ -1,6 +1,6 @@
-# Kalshi Arbitrage Scanner
+# Kalshi Trading Platform
 
-Automated trading bot that detects and executes arbitrage opportunities on Kalshi prediction markets. Provides real-time monitoring, paper trading simulation, and a web dashboard for tracking profitable bracket-vs-threshold arbitrage trades.
+Comprehensive trading platform for Kalshi prediction markets with manual trading, portfolio management, and arbitrage detection. Supports dual-mode execution (paper simulation + live trading), watchlists, and position tracking across multiple market types.
 
 ## Tech Stack
 
@@ -42,7 +42,10 @@ Automated trading bot that detects and executes arbitrage opportunities on Kalsh
 | frontend/components/common | frontend/src/components/common/ | Reusable UI components |
 | frontend/components/layout | frontend/src/components/layout/ | Header and navigation |
 | frontend/components/opportunities | frontend/src/components/opportunities/ | Arbitrage opportunity display and execution |
+| frontend/components/portfolio | frontend/src/components/portfolio/ | Portfolio overview and position tracking |
+| frontend/components/trade | frontend/src/components/trade/ | Manual trading interface |
 | frontend/components/trading | frontend/src/components/trading/ | Trading mode and position management |
+| frontend/components/watchlist | frontend/src/components/watchlist/ | Saved markets management |
 | frontend/hooks | frontend/src/hooks/ | Custom React hooks |
 | frontend/services | frontend/src/services/ | Backend API client |
 | frontend/stores | frontend/src/stores/ | Zustand state management |
@@ -86,8 +89,10 @@ Automated trading bot that detects and executes arbitrage opportunities on Kalsh
 | backend/services/kalshi_client.py | Kalshi REST API client |
 | backend/services/market_classifier.py | Classifies markets as threshold/bracket |
 | backend/services/paper_trading.py | Simulated paper trading service |
+| backend/services/portfolio_service.py | Portfolio summary and position aggregation |
 | backend/services/spot_price_client.py | Free API BTC price client (CoinGecko/CoinLore) |
 | backend/services/trade_executor.py | Routes trades to paper or live |
+| backend/services/watchlist_service.py | Saved markets management service |
 | backend/utils/__init__.py | Utils module exports |
 | backend/utils/kalshi_auth.py | RSA-PSS signature authentication |
 | data/.gitkeep | Placeholder for SQLite database |
@@ -111,11 +116,15 @@ Automated trading bot that detects and executes arbitrage opportunities on Kalsh
 | frontend/src/components/opportunities/ExecuteModal.tsx | Trade execution confirmation modal |
 | frontend/src/components/opportunities/OpportunitiesTab.tsx | Arbitrage opportunities list |
 | frontend/src/components/opportunities/OpportunityCard.tsx | Single opportunity display |
+| frontend/src/components/portfolio/PortfolioTab.tsx | Portfolio overview with positions and orders |
+| frontend/src/components/trade/TradeCard.tsx | Manual trading market card interface |
+| frontend/src/components/trade/TradeTab.tsx | Manual trading tab wrapper |
 | frontend/src/components/trading/ModeBanner.tsx | Paper/live mode status banner |
 | frontend/src/components/trading/ModeToggle.tsx | Paper/live mode switcher |
 | frontend/src/components/trading/PositionList.tsx | Open positions display |
 | frontend/src/components/trading/TradeHistory.tsx | Historical trades list |
 | frontend/src/components/trading/TradingTab.tsx | Trading dashboard view |
+| frontend/src/components/watchlist/WatchlistTab.tsx | Saved markets with live prices |
 | frontend/src/hooks/useSpotPrice.ts | Live BTC price polling hook |
 | frontend/src/services/api.ts | Backend HTTP API client |
 | frontend/src/stores/opportunityStore.ts | Opportunities Zustand store |

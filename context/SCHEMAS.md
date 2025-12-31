@@ -85,6 +85,38 @@
 | trade_id | TEXT | Associated trade ID if traded |
 | trade_mode | TEXT | 'paper' or 'live' if traded |
 
+### manual_orders
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | TEXT PRIMARY KEY | UUID order identifier |
+| created_at | TIMESTAMP | Order creation time |
+| ticker | TEXT | Kalshi market ticker |
+| side | TEXT | 'yes' or 'no' position side |
+| action | TEXT | 'buy' or 'sell' order action |
+| count | INTEGER | Number of contracts (> 0) |
+| price_cents | INTEGER | Order price in cents (1-99) |
+| mode | TEXT | 'paper' or 'live' execution mode |
+| status | TEXT | Order status (pending, filled, failed) |
+| filled_count | INTEGER | Number of contracts filled |
+| avg_fill_price | REAL | Average fill price in dollars |
+| total_cost | REAL | Total cost in dollars |
+| total_fees | REAL | Total fees paid |
+| kalshi_order_id | TEXT | Kalshi API order ID (live only) |
+| error | TEXT | Error message if failed |
+| updated_at | TIMESTAMP | Last update time |
+
+### watchlist
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | TEXT PRIMARY KEY | UUID watchlist item identifier |
+| ticker | TEXT | Kalshi market ticker (unique) |
+| title | TEXT | Market title |
+| subtitle | TEXT | Market subtitle/description |
+| notes | TEXT | Optional user notes |
+| added_at | TIMESTAMP | When added to watchlist |
+
 ---
 
 ## Backend Request Models
@@ -101,6 +133,24 @@
 | Field | Type | Description |
 |-------|------|-------------|
 | starting_balance | Optional[float] | New starting balance, defaults to config |
+
+### TradeRequest (backend/models/schemas.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ticker | str | Kalshi market ticker |
+| side | str | 'yes' or 'no' position side |
+| action | str | 'buy' or 'sell' order action |
+| count | int | Number of contracts to trade |
+| price_cents | int | Order price in cents (1-99) |
+| modes | List[str] | Execution modes: ['paper'], ['live'], or both |
+
+### WatchlistAddRequest (backend/models/schemas.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ticker | str | Kalshi market ticker to add |
+| notes | Optional[str] | Optional user notes about the market |
 
 ---
 

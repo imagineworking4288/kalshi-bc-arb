@@ -5,13 +5,15 @@ import { OpportunitiesTab } from './components/opportunities/OpportunitiesTab';
 import { TradingTab } from './components/trading/TradingTab';
 import { AnalyticsTab } from './components/analytics/AnalyticsTab';
 import { TradeTab } from './components/trade/TradeTab';
+import { PortfolioTab } from './components/portfolio/PortfolioTab';
+import { WatchlistTab } from './components/watchlist/WatchlistTab';
 import { useTradingStore } from './stores/tradingStore';
 import { api } from './services/api';
 
-type Tab = 'opportunities' | 'trading' | 'analytics' | 'trade';
+type Tab = 'trade' | 'portfolio' | 'watchlist' | 'opportunities' | 'trading' | 'analytics';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('opportunities');
+  const [activeTab, setActiveTab] = useState<Tab>('trade');
   const setBalance = useTradingStore((s) => s.setBalance);
   const setMode = useTradingStore((s) => s.setMode);
 
@@ -37,10 +39,12 @@ function App() {
       <TabNav activeTab={activeTab} onTabChange={setActiveTab} />
 
       <main className="container mx-auto px-4 py-6">
+        {activeTab === 'trade' && <TradeTab />}
+        {activeTab === 'portfolio' && <PortfolioTab />}
+        {activeTab === 'watchlist' && <WatchlistTab />}
         {activeTab === 'opportunities' && <OpportunitiesTab />}
         {activeTab === 'trading' && <TradingTab />}
         {activeTab === 'analytics' && <AnalyticsTab />}
-        {activeTab === 'trade' && <TradeTab />}
       </main>
     </div>
   );
