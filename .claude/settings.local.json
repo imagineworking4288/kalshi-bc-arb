@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(generate-context)",
+      "Skill(generate-context:*)",
+      "Bash(mkdir:*)"
+    ]
+  }
+}
