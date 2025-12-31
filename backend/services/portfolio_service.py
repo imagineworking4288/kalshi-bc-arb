@@ -61,7 +61,7 @@ class PortfolioService:
         # Paper positions
         async with db.connection() as conn:
             cursor = await conn.execute("""
-                SELECT ticker, side, contracts, avg_price, total_cost, total_fees
+                SELECT ticker, side, contracts, avg_price, total_cost, total_fees, created_at
                 FROM paper_positions
                 WHERE settled = 0 AND contracts > 0
             """)
@@ -73,9 +73,9 @@ class PortfolioService:
                     "ticker": row[0],
                     "side": row[1],
                     "contracts": row[2],
-                    "avg_price_cents": int(row[3] * 100) if row[3] else 0,
-                    "total_cost_cents": int(row[4] * 100) if row[4] else 0,
-                    "fees_cents": int(row[5] * 100) if row[5] else 0,
+                    "avg_price": float(row[3]) if row[3] else 0.0,
+                    "total_cost": float(row[4]) if row[4] else 0.0,
+                    "created_at": row[6],
                 })
 
         # Live positions from Kalshi
@@ -86,15 +86,18 @@ class PortfolioService:
                 position_count = pos.get("position", 0)
                 side = "yes" if position_count > 0 else "no"
 
+                # Kalshi API returns cents, convert to dollars
+                market_exposure_cents = pos.get("market_exposure", 0)
+                avg_price_cents = market_exposure_cents // abs(position_count) if position_count else 0
+
                 positions.append({
                     "mode": "live",
                     "ticker": pos.get("ticker", ""),
                     "side": side,
                     "contracts": abs(position_count),
-                    "avg_price_cents": pos.get("market_exposure", 0) // abs(position_count) if position_count else 0,
-                    "total_cost_cents": pos.get("market_exposure", 0),
-                    "fees_cents": pos.get("fees_paid", 0),
-                    "realized_pnl_cents": pos.get("realized_pnl", 0),
+                    "avg_price": avg_price_cents / 100.0,
+                    "total_cost": market_exposure_cents / 100.0,
+                    "created_at": pos.get("created_time", ""),
                 })
         except Exception as e:
             logger.warning(f"Could not fetch live positions: {e}")
