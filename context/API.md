@@ -88,7 +88,7 @@ HTTP client for Kalshi REST API
 |----------|--------|---------|-------------|
 | KalshiClient | - | - | Initialize with settings, create auth if credentials exist |
 | KalshiClient._request | method, endpoint, params, json | dict | Make authenticated HTTP request to Kalshi API |
-| KalshiClient.get_markets | status: str, limit: int | List[Dict] | Fetch active markets from Kalshi |
+| KalshiClient.get_markets | limit: int | List[Dict] | Fetch markets from Kalshi (status filter removed) |
 | KalshiClient.get_market | ticker: str | Dict | Get single market by ticker |
 | KalshiClient.get_orderbook | ticker: str, depth: int | Dict | Get orderbook for market |
 | KalshiClient.get_balance | - | Dict | Get account balance |
@@ -96,13 +96,15 @@ HTTP client for Kalshi REST API
 | KalshiClient.place_order | ticker, side, action, count, price, order_type | Dict | Place limit order on Kalshi |
 
 ### spot_price_client.py
-BTC spot price from CF Benchmarks API
+BTC spot price from free APIs with fallback support
 
 | Class/Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
-| SpotPrice | asset, price, timestamp | dataclass | Spot price data container |
-| SpotPriceClient | base_url: str | - | Client with cache for spot prices |
-| SpotPriceClient.get_price | asset: str = "BTC" | Optional[SpotPrice] | Fetch current BTC price from BRTI index |
+| SpotPrice | asset, price, timestamp, source | dataclass | Spot price data with source attribution |
+| SpotPriceClient | base_url: str = None | - | Client with CoinGecko/CoinLore endpoints and cache |
+| SpotPriceClient.get_price | asset: str = "BTC" | Optional[SpotPrice] | Fetch price from CoinGecko with CoinLore fallback |
+| SpotPriceClient._fetch_coingecko | asset: str | Optional[SpotPrice] | Primary: CoinGecko API (30 calls/min free) |
+| SpotPriceClient._fetch_coinlore | asset: str | Optional[SpotPrice] | Fallback: CoinLore API (no published limits) |
 
 ### market_classifier.py
 Classify Kalshi markets as threshold or bracket type
@@ -366,3 +368,32 @@ Paper trading P&L analytics dashboard
 | Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
 | AnalyticsTab | - | JSX.Element | Display P&L summary cards and details |
+
+---
+
+## Root Diagnostic Scripts
+
+### diagnose_kalshi.py
+Legacy Kalshi API diagnostic script
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| test_kalshi_auth | - | bool | Test authentication with old API endpoint |
+
+### diagnose_kalshi_v2.py
+Updated Kalshi API diagnostic with new endpoint
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| load_private_key | path: str | RSAPrivateKey | Load PEM private key from file |
+| sign_request_pss | private_key, timestamp, method, path | str | RSA-PSS signature with DIGEST_LENGTH salt |
+| test_kalshi_auth | - | bool | Test auth with new api.elections.kalshi.com endpoint |
+| test_markets | - | bool | Test markets endpoint with authentication |
+| test_btc_markets | - | bool | Search for BTC-related markets in response |
+
+### start.bat
+Windows batch script launcher
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| - | - | - | Start backend and frontend servers in separate terminals |

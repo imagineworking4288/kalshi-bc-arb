@@ -18,9 +18,6 @@ class Settings(BaseSettings):
     paper_trading_mode: bool = True  # DEFAULT TO SAFE MODE
     paper_starting_balance: float = 10000.00
 
-    # CF Benchmarks (for crypto spot prices)
-    cf_benchmarks_api_url: str = "https://www.cfbenchmarks.com/api"
-
     # Application settings
     database_path: str = "./data/kalshi_arb.db"
     log_level: str = "INFO"

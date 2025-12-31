@@ -23,8 +23,8 @@ Automated trading bot that detects and executes arbitrage opportunities on Kalsh
 └─────────────────┘    └─────────────────┘    └─────────────────┘
         │                      │                      │
         ├─ App.tsx            ├─ main.py             ├─ Kalshi API
-        ├─ Stores             ├─ API Routes          └─ CF Benchmarks
-        ├─ Components         ├─ Services
+        ├─ Stores             ├─ API Routes          ├─ CoinGecko
+        ├─ Components         ├─ Services            └─ CoinLore
         └─ Services           ├─ Database
                               └─ Utils (Auth)
 ```
@@ -68,6 +68,9 @@ Automated trading bot that detects and executes arbitrage opportunities on Kalsh
 | backend/main.py | FastAPI app entry point |
 | backend/config.py | Settings from environment variables |
 | backend/requirements.txt | Python package dependencies |
+| diagnose_kalshi.py | Legacy Kalshi API test script |
+| diagnose_kalshi_v2.py | Updated API diagnostic with auth tests |
+| start.bat | Windows batch script to start servers |
 | backend/api/__init__.py | API module exports |
 | backend/api/routes.py | REST API endpoint handlers |
 | backend/api/websocket.py | WebSocket connection manager |
@@ -82,7 +85,7 @@ Automated trading bot that detects and executes arbitrage opportunities on Kalsh
 | backend/services/kalshi_client.py | Kalshi REST API client |
 | backend/services/market_classifier.py | Classifies markets as threshold/bracket |
 | backend/services/paper_trading.py | Simulated paper trading service |
-| backend/services/spot_price_client.py | CF Benchmarks BTC price client |
+| backend/services/spot_price_client.py | Free API BTC price client (CoinGecko/CoinLore) |
 | backend/services/trade_executor.py | Routes trades to paper or live |
 | backend/utils/__init__.py | Utils module exports |
 | backend/utils/kalshi_auth.py | RSA-PSS signature authentication |

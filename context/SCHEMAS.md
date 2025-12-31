@@ -6,12 +6,11 @@
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| kalshi_api_url | str | "https://trading-api.kalshi.com/trade-api/v2" | Kalshi production API endpoint |
+| kalshi_api_url | str | "https://api.elections.kalshi.com/trade-api/v2" | Kalshi production API endpoint (updated URL) |
 | kalshi_api_key_id | str | "" | API key ID from Kalshi dashboard |
 | kalshi_private_key_path | str | "./keys/kalshi-private-key.pem" | Path to RSA private key file |
 | paper_trading_mode | bool | True | True for simulation, False for real money |
 | paper_starting_balance | float | 10000.00 | Initial paper account balance |
-| cf_benchmarks_api_url | str | "https://www.cfbenchmarks.com/api" | CF Benchmarks spot price API |
 | database_path | str | "./data/kalshi_arb.db" | SQLite database file path |
 | log_level | str | "INFO" | Logging verbosity level |
 
@@ -114,6 +113,7 @@
 | asset | str | Asset symbol (e.g., "BTC") |
 | price | float | Current spot price in USD |
 | timestamp | datetime | Price fetch timestamp |
+| source | str | API source ("CoinGecko", "CoinLore", or "unknown") |
 
 ### ThresholdMarket (backend/services/market_classifier.py)
 
