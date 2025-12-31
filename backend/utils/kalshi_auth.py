@@ -1,3 +1,8 @@
+"""
+RSA-PSS authentication for Kalshi API
+Updated for new endpoint: api.elections.kalshi.com
+"""
+
 import base64
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,12 +28,12 @@ class KalshiAuth:
         path_without_query = path.split('?')[0]
         message = f"{timestamp}{method.upper()}{path_without_query}"
 
-        # Use PSS padding (not PKCS1v15) as required by Kalshi
+        # Use PSS padding with DIGEST_LENGTH as per Kalshi docs
         signature = self.private_key.sign(
             message.encode(),
             padding.PSS(
                 mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH
+                salt_length=padding.PSS.DIGEST_LENGTH  # Per Kalshi docs
             ),
             hashes.SHA256()
         )

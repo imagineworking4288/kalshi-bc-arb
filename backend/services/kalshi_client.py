@@ -44,8 +44,9 @@ class KalshiClient:
             return response.json() if response.content else {}
 
     # Market Data
-    async def get_markets(self, status: str = "active", limit: int = 1000) -> List[Dict]:
-        result = await self._request("GET", "/markets", params={"status": status, "limit": limit})
+    async def get_markets(self, limit: int = 1000) -> List[Dict]:
+        # Note: New API endpoint doesn't support 'status' filter
+        result = await self._request("GET", "/markets", params={"limit": limit})
         return result.get("markets", [])
 
     async def get_market(self, ticker: str) -> Dict:

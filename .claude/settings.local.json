@@ -3,7 +3,9 @@
     "allow": [
       "Skill(generate-context)",
       "Skill(generate-context:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(.backendvenvScriptspython.exe diagnose_kalshi_v2.py)",
+      "Bash(python diagnose_kalshi_v2.py:*)"
     ]
   }
 }
