@@ -67,49 +67,77 @@ class TradeExecutor:
         opportunity: ArbitrageOpportunity,
         num_contracts: int
     ) -> LiveTradeResult:
-        """Execute real arbitrage on Kalshi"""
+        """Execute real arbitrage on Kalshi using batch orders for atomic execution"""
         trade_id = str(uuid.uuid4())
 
-        # Place orders for all brackets concurrently
-        tasks = []
-        for bracket in opportunity.brackets:
-            tasks.append(
-                self.kalshi.place_order(
-                    ticker=bracket.ticker,
-                    side="yes",
-                    action="buy",
-                    count=num_contracts,
-                    price=int(bracket.yes_price * 100)
-                )
+        # Build batch order payload
+        batch_orders = [
+            {
+                "ticker": bracket.ticker,
+                "side": "yes",
+                "action": "buy",
+                "count": num_contracts,
+                "yes_price": int(bracket.yes_price * 100)
+            }
+            for bracket in opportunity.brackets
+        ]
+
+        # Execute all orders atomically via batch endpoint
+        try:
+            result = await self.kalshi.place_batch_orders(batch_orders)
+            batch_results = result.get("orders", [])
+        except Exception as e:
+            return LiveTradeResult(
+                trade_id=trade_id,
+                status="failed",
+                orders=[],
+                total_cost=0,
+                total_fees=0,
+                expected_payout=0,
+                expected_profit=0,
+                message=f"Batch order failed: {str(e)}"
             )
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Process results
+        # Process batch results
         orders = []
         total_cost = 0
         total_fees = 0
         all_filled = True
 
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
+        for i, order_result in enumerate(batch_results):
+            if "error" in order_result:
                 all_filled = False
                 orders.append({
                     "ticker": opportunity.brackets[i].ticker,
                     "status": "failed",
-                    "error": str(result)
+                    "error": order_result.get("error")
                 })
-            else:
-                order = result.get("order", {})
+            elif "order" in order_result:
+                order = order_result["order"]
                 filled = order.get("filled_count", 0)
+                fill_price = order.get("yes_price", 0) / 100 if order.get("yes_price") else 0
+
+                # Calculate cost and fees
+                cost = filled * fill_price
+                fee = order.get("total_fee", 0) / 100 if order.get("total_fee") else 0
+
+                total_cost += cost
+                total_fees += fee
+
                 orders.append({
                     "ticker": opportunity.brackets[i].ticker,
                     "order_id": order.get("order_id"),
                     "filled": filled,
-                    "status": order.get("status")
+                    "status": order.get("status"),
+                    "fill_price": fill_price,
+                    "fee": fee
                 })
+
                 if filled < num_contracts:
                     all_filled = False
+
+        expected_payout = num_contracts if all_filled else 0
+        expected_profit = expected_payout - total_cost - total_fees
 
         return LiveTradeResult(
             trade_id=trade_id,
@@ -117,7 +145,7 @@ class TradeExecutor:
             orders=orders,
             total_cost=total_cost,
             total_fees=total_fees,
-            expected_payout=num_contracts if all_filled else 0,
-            expected_profit=0,
-            message="Live arbitrage executed" if all_filled else "Some orders failed"
+            expected_payout=expected_payout,
+            expected_profit=expected_profit,
+            message="Live arbitrage executed atomically" if all_filled else "Some orders failed or partially filled"
         )

@@ -9,7 +9,8 @@
       "Bash(.backend/venv/Scripts/python.exe:*)",
       "Bash(python test_spot.py:*)",
       "Skill(update-context)",
-      "Skill(update-context:*)"
+      "Skill(update-context:*)",
+      "Bash(python test_api_improvements.py:*)"
     ]
   }
 }

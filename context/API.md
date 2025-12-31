@@ -82,18 +82,20 @@ Pydantic request/response models
 ## backend/services/
 
 ### kalshi_client.py
-HTTP client for Kalshi REST API
+HTTP client for Kalshi REST API with retry logic and batch orders
 
 | Class/Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
 | KalshiClient | - | - | Initialize with settings, create auth if credentials exist |
-| KalshiClient._request | method, endpoint, params, json | dict | Make authenticated HTTP request to Kalshi API |
+| KalshiClient._request | method, endpoint, params, json, max_retries | dict | Make authenticated HTTP request with exponential backoff retry |
 | KalshiClient.get_markets | limit: int | List[Dict] | Fetch markets from Kalshi (status filter removed) |
 | KalshiClient.get_market | ticker: str | Dict | Get single market by ticker |
 | KalshiClient.get_orderbook | ticker: str, depth: int | Dict | Get orderbook for market |
+| KalshiClient.get_events | series_ticker, status, with_nested_markets, limit | List[Dict] | Fetch events with mutually_exclusive flag for arbitrage |
 | KalshiClient.get_balance | - | Dict | Get account balance |
 | KalshiClient.get_positions | status: str | List[Dict] | Get portfolio positions |
-| KalshiClient.place_order | ticker, side, action, count, price, order_type | Dict | Place limit order on Kalshi |
+| KalshiClient.place_order | ticker, side, action, count, price, order_type | Dict | Place single limit order on Kalshi |
+| KalshiClient.place_batch_orders | orders: List[Dict] | Dict | Execute multiple orders atomically via batch endpoint |
 
 ### spot_price_client.py
 BTC spot price from free APIs with fallback support
@@ -155,7 +157,7 @@ Simulated paper trading service
 | PaperTradingService.settle_position | position_id, won | dict | Manually settle position for testing |
 
 ### trade_executor.py
-Route trades to paper simulation or live Kalshi
+Route trades to paper simulation or live Kalshi with atomic execution
 
 | Class/Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
@@ -165,7 +167,7 @@ Route trades to paper simulation or live Kalshi
 | TradeExecutor.get_balance | - | dict | Get balance from paper or Kalshi |
 | TradeExecutor.get_positions | - | list | Get positions from paper or Kalshi |
 | TradeExecutor.execute_arbitrage | opportunity, num_contracts | Union[Paper,Live]TradeResult | Route to paper or live execution |
-| TradeExecutor._execute_live | opportunity, num_contracts | LiveTradeResult | Execute concurrent orders on Kalshi |
+| TradeExecutor._execute_live | opportunity, num_contracts | LiveTradeResult | Execute atomic batch orders on Kalshi |
 
 ---
 
