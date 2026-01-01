@@ -174,7 +174,7 @@ class BTCArbitrageScanner:
 
         try:
             logger.info("=" * 60)
-            logger.info("📊 Starting BTC arbitrage scan (FIXED: all series + settlement matching)")
+            logger.info("[SCAN] Starting BTC arbitrage scan (FIXED: all series + settlement matching)")
             logger.info("=" * 60)
 
             # Fetch from ALL series, separate into ranges and thresholds
@@ -183,10 +183,10 @@ class BTCArbitrageScanner:
             stats['series_stats'] = series_stats
             stats['thresholds_found'] = len(threshold_markets)
 
-            logger.info(f"📊 Total: {len(range_markets)} ranges, {len(threshold_markets)} thresholds")
+            logger.info(f"[SCAN] Total: {len(range_markets)} ranges, {len(threshold_markets)} thresholds")
 
             if not range_markets or not threshold_markets:
-                logger.warning("⚠️ No markets found - check API connection")
+                logger.warning("[WARN] No markets found - check API connection")
                 self._store_scan_result(opportunities, range_markets_simplified, threshold_markets_simplified, calculations, stats)
                 return []
 
@@ -198,18 +198,18 @@ class BTCArbitrageScanner:
             range_by_settlement = self._group_by_settlement(range_markets)
             thresh_by_settlement = self._group_by_settlement(threshold_markets)
 
-            logger.info(f"📊 Range settlement times: {sorted(range_by_settlement.keys())[:5]}...")
-            logger.info(f"📊 Threshold settlement times: {sorted(thresh_by_settlement.keys())[:5]}...")
+            logger.info(f"[SCAN] Range settlement times: {sorted(range_by_settlement.keys())[:5]}...")
+            logger.info(f"[SCAN] Threshold settlement times: {sorted(thresh_by_settlement.keys())[:5]}...")
 
             # Find common settlement times
             common_settlements = set(range_by_settlement.keys()) & set(thresh_by_settlement.keys())
             stats['settlement_times'] = sorted(list(common_settlements))
             stats['event_dates'] = stats['settlement_times']  # Legacy compatibility
 
-            logger.info(f"📊 Found {len(common_settlements)} common settlement times")
+            logger.info(f"[SCAN] Found {len(common_settlements)} common settlement times")
 
             if not common_settlements:
-                logger.warning("⚠️ NO COMMON SETTLEMENT TIMES - ranges and thresholds don't match!")
+                logger.warning("[WARN] NO COMMON SETTLEMENT TIMES - ranges and thresholds don't match!")
                 logger.warning("   This usually means KXBTC (hourly) and KXBTCD (daily) have different schedules")
                 # Log sample times for debugging
                 if range_by_settlement:
@@ -223,7 +223,7 @@ class BTCArbitrageScanner:
                 event_ranges = range_by_settlement[settlement_time]
                 event_thresholds = thresh_by_settlement[settlement_time]
 
-                logger.info(f"🔍 Settlement {settlement_time}: {len(event_ranges)} ranges, {len(event_thresholds)} thresholds")
+                logger.info(f"[SEARCH] Settlement {settlement_time}: {len(event_ranges)} ranges, {len(event_thresholds)} thresholds")
 
                 # Build threshold lookup by strike price
                 thresh_lookup = self._build_threshold_lookup(event_thresholds)
@@ -249,7 +249,7 @@ class BTCArbitrageScanner:
                         opp = self._build_opportunity(range_mkt, thresh_lookup, settlement_time, calc_result)
                         if opp:
                             opportunities.append(opp)
-                            logger.info(f"✅ OPPORTUNITY: {opp.range_description} | Cost: {opp.total_cost_cents}¢ | Edge: {opp.edge_percent:.1f}%")
+                            logger.info(f"[OK] OPPORTUNITY: {opp.range_description} | Cost: {opp.total_cost_cents}¢ | Edge: {opp.edge_percent:.1f}%")
 
                     elif calc_result.reason == 'missing_prices':
                         stats['missing_prices'] += 1
@@ -262,17 +262,17 @@ class BTCArbitrageScanner:
             # Log summary
             logger.info("=" * 60)
             if opportunities:
-                logger.info(f"✅ Found {len(opportunities)} opportunities! Best: {opportunities[0].edge_percent:.1f}% edge")
+                logger.info(f"[OK] Found {len(opportunities)} opportunities! Best: {opportunities[0].edge_percent:.1f}% edge")
             elif stats['near_misses'] > 0:
-                logger.info(f"🔥 No arb found, but {stats['near_misses']} near-misses (cost 100-105¢)")
+                logger.info(f"[HOT] No arb found, but {stats['near_misses']} near-misses (cost 100-105¢)")
             else:
                 best = stats.get('best_cost')
-                logger.info(f"📊 No arb found. Best cost: {best}¢" if best else "📊 No valid calculations")
-            logger.info(f"📊 Stats: {stats['ranges_checked']} ranges checked, {stats['missing_thresholds']} missing thresholds, {stats['missing_prices']} missing prices")
+                logger.info(f"[SCAN] No arb found. Best cost: {best}¢" if best else "[SCAN] No valid calculations")
+            logger.info(f"[SCAN] Stats: {stats['ranges_checked']} ranges checked, {stats['missing_thresholds']} missing thresholds, {stats['missing_prices']} missing prices")
             logger.info("=" * 60)
 
         except Exception as e:
-            logger.error(f"❌ Scan error: {e}")
+            logger.error(f"[X] Scan error: {e}")
             import traceback
             logger.debug(traceback.format_exc())
 
@@ -318,10 +318,10 @@ class BTCArbitrageScanner:
                     'events': len(events),
                     'markets': len(series_markets)
                 }
-                logger.info(f"📊 {series}: {len(events)} events, {len(series_markets)} markets")
+                logger.info(f"[SCAN] {series}: {len(events)} events, {len(series_markets)} markets")
 
             except Exception as e:
-                logger.warning(f"⚠️ Failed to fetch {series}: {e}")
+                logger.warning(f"[WARN] Failed to fetch {series}: {e}")
                 series_stats[series] = {'events': 0, 'markets': 0, 'error': str(e)}
 
         # Separate by market type (range = -B, threshold = -T)
@@ -336,8 +336,8 @@ class BTCArbitrageScanner:
         for m in threshold_markets:
             thresh_by_series[m.get('_series', 'unknown')] += 1
 
-        logger.info(f"📊 Ranges by series: {dict(range_by_series)}")
-        logger.info(f"📊 Thresholds by series: {dict(thresh_by_series)}")
+        logger.info(f"[SCAN] Ranges by series: {dict(range_by_series)}")
+        logger.info(f"[SCAN] Thresholds by series: {dict(thresh_by_series)}")
 
         return range_markets, threshold_markets, series_stats
 
@@ -690,6 +690,24 @@ class BTCArbitrageScanner:
             'guaranteed_payout_cents': guaranteed_payout,
             'guaranteed_profit_cents': guaranteed_profit,
             'return_percent': round((guaranteed_profit / (total_cost + total_fees)) * 100, 2) if (total_cost + total_fees) > 0 else 0
+        }
+
+    async def scan_once(self) -> Dict:
+        """
+        Wrapper for scan() that returns a dict suitable for scanner_db.
+        This is called by scanner_service.py.
+        """
+        opportunities = await self.scan(min_edge_percent=3.0)
+        stats = self.get_stats()
+        last_result = self.get_last_scan_result()
+
+        return {
+            'opportunities': [opp.to_dict() for opp in opportunities],
+            'count': len(opportunities),
+            'scan_count': stats['total_scans'],
+            'last_scan_duration_ms': stats['last_scan_duration_ms'],
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'stats': last_result.stats if last_result else {}
         }
 
     def get_stats(self) -> Dict:

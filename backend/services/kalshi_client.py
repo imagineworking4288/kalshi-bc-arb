@@ -14,7 +14,7 @@ class KalshiClient:
 
     def __init__(self):
         self.settings = get_settings()
-        self.base_url = self.settings.kalshi_api_url
+        self.base_url = self.settings.kalshi_base_url
         self.auth: Optional[KalshiAuth] = None
 
         if self.settings.has_kalshi_credentials:

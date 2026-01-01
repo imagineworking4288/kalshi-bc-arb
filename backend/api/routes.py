@@ -5,20 +5,22 @@ from datetime import datetime, timezone
 from ..config import get_settings
 from ..database.connection import db
 from ..models.schemas import ExecuteRequest, ResetRequest, TradeRequest, WatchlistAddRequest
-from ..services import (
-    KalshiClient,
-    SpotPriceClient,
+from ..services.kalshi_client import KalshiClient
+from ..services.spot_price_client import SpotPriceClient
+from ..services.market_classifier import (
     MarketClassifier,
     MarketType,
     ThresholdMarket,
     BracketMarket,
-    MarketGroup,
-    ArbitrageDetector,
-    TradeExecutor,
-    PaperTradingService
+    MarketGroup
 )
+from ..services.arbitrage_detector import ArbitrageDetector
+from ..services.trade_executor import TradeExecutor
+from ..services.paper_trading import PaperTradingService
 from ..services.portfolio_service import PortfolioService
 from ..services.watchlist_service import WatchlistService
+from ..services.scanner_db import ScannerDatabase
+from ..services.log_config import LOG_DIR, MAIN_LOG
 
 router = APIRouter()
 
@@ -31,6 +33,7 @@ executor = TradeExecutor(kalshi)
 paper = PaperTradingService()
 portfolio_service = PortfolioService()
 watchlist_service = WatchlistService()
+scanner_db = ScannerDatabase()
 
 # Cache for opportunities
 _opp_cache: dict = {}
@@ -884,3 +887,80 @@ async def get_btc_arb_debug():
             )
         }
     }
+
+
+# ============== WEATHER ARBITRAGE ROUTES ==============
+
+@router.get("/weather-arb/status")
+async def get_weather_arb_status():
+    """Get weather arbitrage scanner status from database."""
+    result = scanner_db.get_scanner_result("weather")
+    if result:
+        return result
+    return {"error": "Scanner not running", "hint": "Start scanner service"}
+
+
+@router.get("/weather-arb/city/{code}")
+async def get_weather_city(code: str):
+    """Get weather status for a specific city."""
+    result = scanner_db.get_scanner_result("weather")
+    if not result:
+        return {"error": "Scanner not running"}
+
+    cities = result.get("cities", {})
+    city = cities.get(code.upper())
+    if city:
+        return city
+    return {"error": f"City {code} not found"}
+
+
+@router.get("/weather-arb/history")
+async def get_weather_arb_history(limit: int = 100):
+    """Get weather scanner history."""
+    return scanner_db.get_scanner_history("weather", limit)
+
+
+# ============== UNIFIED SCANNER ROUTES ==============
+
+@router.get("/scanners/status")
+async def get_all_scanners_status():
+    """Get status of all scanners."""
+    return scanner_db.get_all_results()
+
+
+# ============== LOG ROUTES ==============
+
+@router.get("/logs/recent")
+async def get_recent_logs(lines: int = 100, source: str = None, level: str = None):
+    """Get recent log entries."""
+    try:
+        if not MAIN_LOG.exists():
+            return {"logs": [], "error": "No log file yet"}
+
+        with open(MAIN_LOG, 'r') as f:
+            all_lines = f.readlines()
+
+        recent = all_lines[-lines:] if len(all_lines) > lines else all_lines
+
+        if source:
+            recent = [l for l in recent if source.lower() in l.lower()]
+        if level:
+            recent = [l for l in recent if f'| {level.upper()} |' in l]
+
+        return {"logs": [l.strip() for l in recent], "total": len(all_lines)}
+    except Exception as e:
+        return {"logs": [], "error": str(e)}
+
+
+@router.get("/logs/files")
+async def get_log_files():
+    """List available log files."""
+    files = []
+    for f in LOG_DIR.glob("*.log"):
+        stat = f.stat()
+        files.append({
+            "name": f.name,
+            "size": f"{stat.st_size / 1024:.1f} KB",
+            "modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
+        })
+    return {"files": files}

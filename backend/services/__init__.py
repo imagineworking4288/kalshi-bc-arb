@@ -1,17 +1,10 @@
-from .kalshi_client import KalshiClient
-from .spot_price_client import SpotPriceClient, SpotPrice
-from .market_classifier import MarketClassifier, MarketType, ThresholdMarket, BracketMarket, MarketGroup
-from .arbitrage_detector import ArbitrageDetector, ArbitrageOpportunity
-from .fee_calculator import calculate_fee, calculate_arbitrage_cost, OrderLeg
-from .paper_trading import PaperTradingService, PaperTradeResult
-from .trade_executor import TradeExecutor, LiveTradeResult
+"""
+Services module for Kalshi trading platform.
 
-__all__ = [
-    "KalshiClient",
-    "SpotPriceClient", "SpotPrice",
-    "MarketClassifier", "MarketType", "ThresholdMarket", "BracketMarket", "MarketGroup",
-    "ArbitrageDetector", "ArbitrageOpportunity",
-    "calculate_fee", "calculate_arbitrage_cost", "OrderLeg",
-    "PaperTradingService", "PaperTradeResult",
-    "TradeExecutor", "LiveTradeResult"
-]
+Import services explicitly when needed to avoid circular imports:
+    from backend.services.kalshi_client import KalshiClient
+    from backend.services.btc_arb_scanner import BTCArbScanner
+"""
+
+# Don't auto-import - let modules import what they need explicitly
+# This prevents circular import issues with config

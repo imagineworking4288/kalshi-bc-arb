@@ -16,16 +16,16 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 ## Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend       │    │   External      │
-│   React/TS      │◄──►│   FastAPI       │◄──►│   APIs          │
-│   :5173         │    │   :8000         │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-        │                      │                      │
-        ├─ App.tsx            ├─ main.py             ├─ Kalshi API
-        ├─ Stores             ├─ API Routes          ├─ CoinGecko
-        ├─ Components         ├─ Services            └─ CoinLore
-        └─ Services           ├─ Database
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Frontend      │    │   Backend       │    │   Scanners      │    │   Log Viewer    │
+│   React/TS      │◄──►│   FastAPI       │◄──►│   BTC/Weather   │◄──►│   Colored       │
+│   :5173         │    │   :8001         │    │   SQLite Write  │    │   Filter        │
+└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
+        │                      │                      │                        │
+        ├─ App.tsx            ├─ main.py             ├─ run_scanners.py      ├─ run_logs.py
+        ├─ Stores             ├─ API Routes          ├─ Scanner Service       ├─ Log Viewer
+        ├─ Components         ├─ Services            ├─ Weather Scanner       └─ Filtering
+        └─ Services           ├─ Database            └─ BTC Scanner
                               └─ Utils (Auth)
 ```
 
@@ -38,6 +38,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/models | backend/models/ | Pydantic request/response schemas |
 | backend/services | backend/services/ | Core business logic and external integrations |
 | backend/utils | backend/utils/ | Kalshi RSA-PSS authentication |
+| backend/config | backend/config/ | Settings and location configurations |
 | frontend/components/analytics | frontend/src/components/analytics/ | P&L analytics display |
 | frontend/components/common | frontend/src/components/common/ | Reusable UI components |
 | frontend/components/layout | frontend/src/components/layout/ | Header and navigation |
@@ -61,6 +62,10 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 |------|---------|-------------|
 | backend/main.py | `uvicorn backend.main:app --reload` | Start FastAPI backend server |
 | frontend/src/main.tsx | `npm run dev` (in frontend/) | Start React development server |
+| run_scanners.py | `python run_scanners.py` | Run weather and BTC scanners independently |
+| run_logs.py | `python run_logs.py` | Run colored log viewer with filtering |
+| start.bat | `start.bat` | Launch all 4 services in Windows Terminal tabs |
+| stop.bat | `stop.bat` | Stop all platform services |
 | docker-compose.yml | `docker-compose up` | Run full stack in containers |
 
 ## File Tree
@@ -71,10 +76,19 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | MVP_IMPLEMENTATION.md | Implementation guide and roadmap |
 | .claude/settings.local.json | Claude configuration settings |
 | backend/main.py | FastAPI app entry point |
-| backend/config.py | Settings from environment variables |
+| backend/config.py | Legacy settings (replaced by config module) |
+| backend/config/__init__.py | Pydantic settings with location configs |
+| backend/config/fees.py | Kalshi fee calculation utilities |
+| backend/config/locations/__init__.py | Location module exports |
+| backend/config/locations/base.py | LocationConfig dataclass with forecast adjustments |
+| backend/config/locations/registry.py | Weather location definitions (7 cities) |
 | diagnose_kalshi.py | Legacy Kalshi API test script |
 | diagnose_kalshi_v2.py | Updated API diagnostic with auth tests |
 | package-lock.json | NPM dependency lock file |
+| start.bat | Windows batch 4-terminal launcher script |
+| stop.bat | Stop all Kalshi platform services |
+| run_scanners.py | Scanner service entry point |
+| run_logs.py | Log viewer entry point |
 | backend/api/__init__.py | API module exports |
 | backend/api/routes.py | REST API endpoint handlers |
 | backend/api/websocket.py | WebSocket connection manager |
@@ -97,6 +111,12 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/services/auto_trader.py | Automated trading engine with risk management |
 | backend/services/btc_arb_scanner.py | BTC arbitrage opportunity detection scanner |
 | backend/services/btc_arb_engine.py | Continuous BTC arbitrage scanning engine |
+| backend/services/log_config.py | Centralized logging with colored output |
+| backend/services/log_viewer.py | Real-time log viewer with filtering |
+| backend/services/nws_client.py | National Weather Service API client |
+| backend/services/scanner_db.py | SQLite database for scanner results |
+| backend/services/scanner_service.py | Unified scanner service runner |
+| backend/services/weather_arb_scanner.py | Weather arbitrage scanner for 14 series |
 | backend/utils/__init__.py | Utils module exports |
 | backend/utils/kalshi_auth.py | RSA-PSS signature authentication |
 | backend/utils/logger.py | Logging system with activity buffer |

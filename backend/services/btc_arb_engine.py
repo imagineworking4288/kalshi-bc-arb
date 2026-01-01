@@ -65,7 +65,7 @@ class BTCArbitrageEngine:
         await self._ensure_config_exists()
         self.status.is_running = True
         self._task = asyncio.create_task(self._run_loop())
-        logger.info(f"🚀 Engine started - scanning every {self.config.scan_interval_seconds}s")
+        logger.info(f"[START] Engine started - scanning every {self.config.scan_interval_seconds}s")
 
     async def stop(self):
         """Stop the engine."""
@@ -76,7 +76,7 @@ class BTCArbitrageEngine:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        logger.info("🛑 Engine stopped")
+        logger.info("[STOP] Engine stopped")
 
     async def _ensure_config_exists(self):
         """Ensure config row exists in database."""
@@ -87,7 +87,7 @@ class BTCArbitrageEngine:
                 """)
                 await conn.commit()
         except Exception as e:
-            logger.error(f"❌ Error ensuring config: {e}")
+            logger.error(f"[X] Error ensuring config: {e}")
 
     async def _load_config(self):
         """Load config from database."""
@@ -105,7 +105,7 @@ class BTCArbitrageEngine:
                     self.config.max_position_per_opp_cents = cfg.get('max_position_per_opp_cents', 50000)
                     self.config.mode = cfg.get('mode', 'paper')
         except Exception as e:
-            logger.error(f"❌ Config load error: {e}")
+            logger.error(f"[X] Config load error: {e}")
 
     async def _save_config(self):
         """Save config to database."""
@@ -132,7 +132,7 @@ class BTCArbitrageEngine:
                 ))
                 await conn.commit()
         except Exception as e:
-            logger.error(f"❌ Config save error: {e}")
+            logger.error(f"[X] Config save error: {e}")
 
     async def _run_loop(self):
         """Main scanning loop."""
@@ -143,7 +143,7 @@ class BTCArbitrageEngine:
                 break
             except Exception as e:
                 self.status.last_error = str(e)
-                logger.error(f"❌ Scan cycle error: {e}")
+                logger.error(f"[X] Scan cycle error: {e}")
 
             await asyncio.sleep(self.config.scan_interval_seconds)
 
@@ -172,7 +172,7 @@ class BTCArbitrageEngine:
 
     async def _auto_execute(self, opportunity: ArbOpportunity):
         """Auto-execute an opportunity."""
-        logger.info(f"💰 Auto-executing: {opportunity.range_description} ({opportunity.edge_percent:.1f}% edge)")
+        logger.info(f"[$] Auto-executing: {opportunity.range_description} ({opportunity.edge_percent:.1f}% edge)")
 
         try:
             trade_calc = self.scanner.calculate_trade(
@@ -181,21 +181,21 @@ class BTCArbitrageEngine:
             )
 
             if 'error' in trade_calc:
-                logger.warning(f"⚠️ Calc error: {trade_calc['error']}")
+                logger.warning(f"[WARN] Calc error: {trade_calc['error']}")
                 return
 
             result = await self._execute_trade(opportunity, trade_calc)
 
             if result.get('success'):
                 self.status.auto_executions += 1
-                logger.info(f"✅ Executed! Profit: ${trade_calc['guaranteed_profit_cents']/100:.2f}")
+                logger.info(f"[OK] Executed! Profit: ${trade_calc['guaranteed_profit_cents']/100:.2f}")
 
                 # Disable auto-trade after execution (prevent rapid-fire)
                 self.config.auto_trade_enabled = False
                 await self._save_config()
 
         except Exception as e:
-            logger.error(f"❌ Execution error: {e}")
+            logger.error(f"[X] Execution error: {e}")
 
     async def _execute_trade(self, opportunity: ArbOpportunity, trade_calc: Dict) -> Dict:
         """Execute a trade (paper or live)."""
@@ -260,7 +260,7 @@ class BTCArbitrageEngine:
                 'profit_cents': calc['guaranteed_profit_cents']
             }
         except Exception as e:
-            logger.error(f"❌ Paper execution error: {e}")
+            logger.error(f"[X] Paper execution error: {e}")
             return {'success': False, 'error': str(e)}
 
     async def _execute_live(self, opp: ArbOpportunity, contracts: int, calc: Dict, exec_id: str) -> Dict:

@@ -51,7 +51,7 @@ class ActivityHandler(logging.Handler):
             msg = self.format(record)
             # Extract emoji from message if present
             emoji = ""
-            for e in ["📊", "✅", "🔥", "❌", "⚠️", "🔍", "💰", "📈", "📉", "🎯", "⏱️"]:
+            for e in ["[SCAN]", "[OK]", "[HOT]", "[X]", "[WARN]", "[SEARCH]", "[$]", "[UP]", "[DOWN]", "[TARGET]", "[TIME]"]:
                 if e in msg:
                     emoji = e
                     break

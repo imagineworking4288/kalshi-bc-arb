@@ -626,3 +626,81 @@ Windows batch script launcher
 | Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
 | - | - | - | Start backend and frontend servers in separate terminals |
+
+### log_config.py
+Centralized logging configuration with colored output
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| ColoredFormatter | - | LogFormatter | Custom formatter with ANSI color codes for levels |
+| setup_logging | service_name: str | Logger | Setup logger with console, file, and rotating handlers |
+
+### log_viewer.py
+Real-time log viewer with filtering and colored output
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| LogViewer | - | - | Log viewer with keyword filtering and color support |
+| LogViewer.start | - | None | Start the log viewer main loop |
+
+### nws_client.py
+National Weather Service API client for forecast data
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| NWSClient | - | - | Client for NWS point forecast API |
+| NWSClient.get_forecast | lat: float, lon: float | List[Dict] | Get 7-day forecast for coordinates |
+
+### scanner_db.py
+SQLite database for scanner results
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| ScannerDatabase | db_path: Optional[str] | - | Database for scanner results and stats |
+| ScannerDatabase.save_scanner_result | scanner_type: str, result: Dict | None | Save scanner result to database |
+| ScannerDatabase.get_scanner_result | scanner_type: str | Optional[Dict] | Get latest scanner result |
+| ScannerDatabase.get_scanner_stats | scanner_type: str | Dict | Get scanner performance statistics |
+
+### scanner_service.py
+Unified scanner service that runs all scanners
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| ScannerService | - | - | Service running BTC and weather scanners |
+| ScannerService.run_btc_scanner | - | None | Run BTC scanner loop every 2s |
+| ScannerService.run_weather_scanner | - | None | Run weather scanner loop every 30s |
+| ScannerService.start | - | None | Start all scanners concurrently |
+| ScannerService.stop | - | None | Stop all running scanners |
+
+### weather_arb_scanner.py
+Weather arbitrage scanner for 14 market series (7 cities × 2 types)
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| WeatherArbScanner | kalshi_client | - | Scanner for weather market arbitrage opportunities |
+| WeatherArbScanner.scan_once | - | Dict | Scan all 14 weather series for bracket arbitrage |
+| WeatherArbScanner.get_nws_forecast | location_config | Optional[Dict] | Get NWS forecast for location |
+| WeatherArbScanner.analyze_series | series_ticker, forecast_temp | Dict | Analyze single weather series for opportunities |
+
+### fees.py
+Kalshi fee calculation utilities
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| calculate_fees | subtotal: int | int | Calculate Kalshi trading fees in cents |
+
+### locations/base.py
+LocationConfig dataclass with forecast adjustments
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| LocationConfig | - | - | Weather location configuration with forecast adjustments |
+
+### locations/registry.py
+Weather location definitions for 7 major cities
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| get_location | code: str | LocationConfig | Get location config by code |
+| get_all_locations | - | List[LocationConfig] | Get all 7 location configs |
+| get_all_series | - | List[str] | Get all 14 series tickers (7 cities × 2 types) |
