@@ -568,3 +568,45 @@
 | message | string | Status message |
 | paper_mode | boolean | True if paper trade |
 | orders | Array<{ticker, contracts, price, fee}> | Order details |
+
+---
+
+## Arbitrage Hub Types (frontend/src/components/arbitrage/)
+
+### CryptoAsset (CryptoArbitrageSection.tsx)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | string | Asset identifier (BTC, ETH, SOL, XRP) |
+| name | string | Full asset name (Bitcoin, Ethereum, etc.) |
+| code | string | Market code |
+| icon | string | Unicode icon (₿, Ξ, ◎, ✕) |
+| series | string | Range market series (KXBTC, KXETH) |
+| thresholdSeries | string | Threshold market series (KXBTCD, KXETHD) |
+| enabled | boolean | Whether scanner is active |
+| color | string | Tailwind gradient classes |
+| borderColor | string | Tailwind border color classes |
+
+### StatItem (shared/StatsBar.tsx)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| value | number \| string | Stat value to display |
+| label | string | Stat label |
+| color | string | Tailwind text color class |
+
+### ViewMode (CryptoArbitrageSection.tsx)
+
+| Value | Description |
+|-------|-------------|
+| 'overview' | Card grid view showing all cryptos |
+| 'scanner' | Detailed scanner view for specific crypto |
+
+### TableColumn (shared/OpportunityTable.tsx)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| key | string | Column identifier |
+| label | string | Column header text |
+| align | 'left' \| 'right' \| 'center' | Text alignment |
+| bold | boolean | Whether header should be bold |

@@ -324,11 +324,11 @@ React application entry point
 | - | - | - | Render App in React.StrictMode to root element |
 
 ### App.tsx
-Root application component with tab navigation
+Root application component with arbitrage hub navigation
 
 | Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
-| App | - | JSX.Element | Main app with Header, TabNav, tab content |
+| App | - | JSX.Element | Main app with Header, TabNav (updated with Arbitrage tab), route to ArbitrageHub |
 
 ---
 
@@ -503,6 +503,52 @@ Historical trades list for paper trading
 | Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
 | TradeHistory | - | JSX.Element | List recent paper trades with profit |
+
+---
+
+## frontend/src/components/arbitrage/
+
+### ArbitrageHub.tsx
+Main arbitrage hub with sub-navigation
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| ArbitrageHub | - | JSX.Element | Container with Crypto/Weather/Economic sub-tabs, route to section components |
+
+### CryptoArbitrageSection.tsx
+Crypto arbitrage scanner with card-based UI
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| CryptoArbitrageSection | - | JSX.Element | Two-mode UI: overview cards (BTC/ETH/SOL/XRP) and detailed scanner view |
+
+### WeatherArbitrageSection.tsx
+Weather arbitrage scanner placeholder
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| WeatherArbitrageSection | - | JSX.Element | City cards grid (NYC/Chicago/Miami/Austin/LA/Denver) with coming soon badges |
+
+### shared/StatsBar.tsx
+Reusable statistics display component
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| StatsBar | stats: StatItem[] | JSX.Element | Flexible stat boxes grid with dynamic columns and colors |
+
+### shared/ConfigPanel.tsx
+Reusable configuration controls component
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| ConfigPanel | minEdge, budgetDollars, mode, autoTrade, callbacks | JSX.Element | Edge %, budget, paper/live mode, auto-trade controls |
+
+### shared/OpportunityTable.tsx
+Reusable opportunity table component
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| OpportunityTable | columns, data, handlers, renderers | JSX.Element | Generic table with click handlers, row highlighting, custom cell rendering |
 
 ---
 

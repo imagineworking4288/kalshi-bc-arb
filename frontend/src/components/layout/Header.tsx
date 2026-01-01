@@ -18,7 +18,6 @@ function LiveIndicator({ isLive }: { isLive: boolean }) {
 }
 
 export function Header() {
-  const mode = useTradingStore((s) => s.mode);
   const balance = useTradingStore((s) => s.balance);
   const { data: spotPrice, isLoading: priceLoading } = useSpotPrice();
 

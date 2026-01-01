@@ -41,13 +41,14 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/components/analytics | frontend/src/components/analytics/ | P&L analytics display |
 | frontend/components/common | frontend/src/components/common/ | Reusable UI components |
 | frontend/components/layout | frontend/src/components/layout/ | Header and navigation |
+| frontend/components/arbitrage | frontend/src/components/arbitrage/ | Multi-market arbitrage hub with crypto and weather sections |
 | frontend/components/opportunities | frontend/src/components/opportunities/ | Arbitrage opportunity display and execution |
 | frontend/components/portfolio | frontend/src/components/portfolio/ | Portfolio overview and position tracking |
 | frontend/components/trade | frontend/src/components/trade/ | Manual trading interface |
 | frontend/components/trading | frontend/src/components/trading/ | Trading mode and position management |
 | frontend/components/watchlist | frontend/src/components/watchlist/ | Saved markets management |
 | frontend/components/autotrader | frontend/src/components/autotrader/ | Automated trading and edge detection |
-| frontend/components/btcarb | frontend/src/components/btcarb/ | BTC arbitrage monitoring and control |
+| frontend/components/btcarb | frontend/src/components/btcarb/ | Legacy BTC arbitrage (replaced by arbitrage hub) |
 | frontend/hooks | frontend/src/hooks/ | Custom React hooks |
 | frontend/services | frontend/src/services/ | Backend API client |
 | frontend/stores | frontend/src/stores/ | Zustand state management |
@@ -107,11 +108,17 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/tsconfig.json | TypeScript compiler options |
 | frontend/tsconfig.node.json | Node TypeScript config |
 | frontend/vite.config.ts | Vite bundler configuration |
-| frontend/src/App.tsx | Root React component with tabs |
+| frontend/src/App.tsx | Root React component with arbitrage hub navigation |
 | frontend/src/index.css | Global Tailwind CSS styles |
 | frontend/src/main.tsx | React DOM entry point |
 | frontend/src/vite-env.d.ts | Vite type definitions |
 | frontend/src/components/analytics/AnalyticsTab.tsx | P&L summary dashboard |
+| frontend/src/components/arbitrage/ArbitrageHub.tsx | Main arbitrage hub with sub-navigation |
+| frontend/src/components/arbitrage/CryptoArbitrageSection.tsx | Crypto arbitrage scanner with card-based UI |
+| frontend/src/components/arbitrage/WeatherArbitrageSection.tsx | Weather arbitrage scanner placeholder |
+| frontend/src/components/arbitrage/shared/StatsBar.tsx | Reusable statistics display component |
+| frontend/src/components/arbitrage/shared/ConfigPanel.tsx | Reusable configuration controls component |
+| frontend/src/components/arbitrage/shared/OpportunityTable.tsx | Reusable opportunity table component |
 | frontend/src/components/common/Modal.tsx | Reusable modal dialog |
 | frontend/src/components/layout/Header.tsx | App header with balance |
 | frontend/src/components/layout/TabNav.tsx | Tab navigation component |

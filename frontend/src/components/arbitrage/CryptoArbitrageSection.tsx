@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { StatsBar } from './shared/StatsBar';
+import { ConfigPanel } from './shared/ConfigPanel';
+import { OpportunityTable } from './shared/OpportunityTable';
 
 interface ArbLeg {
   ticker: string;
@@ -87,17 +90,33 @@ interface EngineStatus {
     threshold_markets: SimplifiedMarket[];
     event_dates: string[];
   };
-  calculations: Calculation[];  // Top 20 for backwards compat
-  all_calculations: Calculation[];  // ALL calculations sorted by cost
-  near_misses: Calculation[];  // Cost 100-105¢
-  profitable: Calculation[];  // Cost < 100¢
+  calculations: Calculation[];
+  all_calculations: Calculation[];
+  near_misses: Calculation[];
+  profitable: Calculation[];
   stats: Stats;
   activity_log: LogEntry[];
 }
 
 type TabType = 'near_misses' | 'calculations' | 'markets' | 'log' | 'opportunities';
+type ViewMode = 'overview' | 'scanner';
 
-export function BTCArbitrageTab() {
+interface CryptoAsset {
+  id: string;
+  name: string;
+  code: string;
+  icon: string;
+  series: string;
+  thresholdSeries: string;
+  enabled: boolean;
+  color: string;
+  borderColor: string;
+}
+
+export function CryptoArbitrageSection() {
+  const [viewMode, setViewMode] = useState<ViewMode>('overview');
+  const [selectedAsset, setSelectedAsset] = useState<string>('BTC');
+
   const [status, setStatus] = useState<EngineStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [executing, setExecuting] = useState<string | null>(null);
@@ -110,6 +129,53 @@ export function BTCArbitrageTab() {
   const [mode, setMode] = useState<'paper' | 'live'>('paper');
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const cryptoAssets: CryptoAsset[] = [
+    {
+      id: 'BTC',
+      name: 'Bitcoin',
+      code: 'BTC',
+      icon: '₿',
+      series: 'KXBTC',
+      thresholdSeries: 'KXBTCD',
+      enabled: true,
+      color: 'from-orange-900/30 to-yellow-900/30',
+      borderColor: 'border-orange-500/50'
+    },
+    {
+      id: 'ETH',
+      name: 'Ethereum',
+      code: 'ETH',
+      icon: 'Ξ',
+      series: 'KXETH',
+      thresholdSeries: 'KXETHD',
+      enabled: false,
+      color: 'from-blue-900/30 to-purple-900/30',
+      borderColor: 'border-blue-500/50'
+    },
+    {
+      id: 'SOL',
+      name: 'Solana',
+      code: 'SOL',
+      icon: '◎',
+      series: 'KXSOL',
+      thresholdSeries: 'KXSOLD',
+      enabled: false,
+      color: 'from-purple-900/30 to-pink-900/30',
+      borderColor: 'border-purple-500/50'
+    },
+    {
+      id: 'XRP',
+      name: 'XRP',
+      code: 'XRP',
+      icon: '✕',
+      series: 'KXXRP',
+      thresholdSeries: 'KXXRPD',
+      enabled: false,
+      color: 'from-gray-900/30 to-slate-900/30',
+      borderColor: 'border-gray-500/50'
+    }
+  ];
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -132,7 +198,7 @@ export function BTCArbitrageTab() {
     };
 
     fetchStatus();
-    pollRef.current = setInterval(fetchStatus, 2000);  // Poll every 2s to catch price moves
+    pollRef.current = setInterval(fetchStatus, 2000);
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -194,7 +260,6 @@ export function BTCArbitrageTab() {
 
   const getTimeAgo = (iso: string | null) => {
     if (!iso) return '';
-    // Ensure ISO string has Z suffix for proper UTC parsing
     const isoWithZ = iso.endsWith('Z') ? iso : iso + 'Z';
     const diff = Date.now() - new Date(isoWithZ).getTime();
     const seconds = Math.floor(diff / 1000);
@@ -220,6 +285,15 @@ export function BTCArbitrageTab() {
     alert('Tickers copied to clipboard!');
   };
 
+  const handleViewScanner = (assetId: string) => {
+    setSelectedAsset(assetId);
+    setViewMode('scanner');
+  };
+
+  const handleBackToOverview = () => {
+    setViewMode('overview');
+  };
+
   if (loading) {
     return (
       <div className="p-6 text-center">
@@ -228,10 +302,140 @@ export function BTCArbitrageTab() {
     );
   }
 
+  // Overview Mode - Card Grid
+  if (viewMode === 'overview') {
+    return (
+      <div className="space-y-4">
+        {/* Explanation Banner */}
+        <div className="bg-gradient-to-r from-orange-900/20 to-yellow-900/20 border border-orange-500/30 rounded-lg p-4">
+          <h3 className="text-lg font-bold text-white mb-2">₿ Crypto Range vs Threshold Arbitrage</h3>
+          <p className="text-sm text-gray-300 mb-2">
+            Buy Range YES + Lower Threshold NO + Upper Threshold YES for guaranteed $1 payout when total cost is less than 100¢.
+          </p>
+          <div className="text-xs text-gray-400">
+            <strong>Strategy:</strong> Each crypto has range markets (e.g., "BTC $90k-$95k") and threshold markets (e.g., "BTC ≥$92k").
+            If you can buy all three positions for less than $1 total, you're guaranteed a $1 payout regardless of the final price.
+          </div>
+        </div>
+
+        {/* Crypto Cards Grid */}
+        <div className="grid grid-cols-2 gap-4">
+          {cryptoAssets.map((asset) => {
+            const isLive = asset.enabled && status;
+            const stats = asset.enabled && status ? status.stats : null;
+            const rangeCount = asset.enabled && status ? status.market_data.range_markets.length : 0;
+            const thresholdCount = asset.enabled && status ? status.market_data.threshold_markets.length : 0;
+
+            return (
+              <div
+                key={asset.id}
+                className={`bg-gradient-to-br ${asset.color} border ${asset.borderColor} rounded-lg p-4 relative overflow-hidden`}
+              >
+                {/* Status Badge */}
+                <div className="absolute top-2 right-2">
+                  {isLive ? (
+                    <span className="px-2 py-1 bg-green-600/80 text-green-100 text-xs font-bold rounded flex items-center gap-1">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-300 animate-pulse"></span>
+                      LIVE
+                    </span>
+                  ) : (
+                    <span className="px-2 py-1 bg-yellow-600/80 text-yellow-100 text-xs font-bold rounded">
+                      COMING SOON
+                    </span>
+                  )}
+                </div>
+
+                {/* Crypto Icon */}
+                <div className="text-4xl mb-2 font-bold">{asset.icon}</div>
+
+                {/* Crypto Name */}
+                <h4 className="text-lg font-bold text-white mb-1">{asset.name}</h4>
+                <p className="text-xs text-gray-400 mb-1">Market Code: {asset.code}</p>
+                <p className="text-xs text-gray-500 mb-3">Series: {asset.series} / {asset.thresholdSeries}</p>
+
+                {/* Stats */}
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Ranges:</span>
+                    <span className={isLive ? 'text-blue-400 font-medium' : 'text-gray-500'}>{isLive ? rangeCount : '-'}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Thresholds:</span>
+                    <span className={isLive ? 'text-purple-400 font-medium' : 'text-gray-500'}>{isLive ? thresholdCount : '-'}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Best Cost:</span>
+                    <span className={isLive && stats ? getCostColor(stats.best_cost) + ' font-medium' : 'text-gray-500'}>
+                      {isLive && stats && stats.best_cost !== null ? `${stats.best_cost}¢` : '-'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Near Misses:</span>
+                    <span className={isLive && stats ? 'text-orange-400 font-medium' : 'text-gray-500'}>
+                      {isLive && stats ? stats.near_misses : 0}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Opportunities:</span>
+                    <span className={isLive && status && status.opportunities.length > 0 ? 'text-green-400 font-bold' : 'text-gray-500'}>
+                      {isLive && status ? status.opportunities.length : 0}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Action Button */}
+                <button
+                  onClick={() => asset.enabled && handleViewScanner(asset.id)}
+                  disabled={!asset.enabled}
+                  className={`w-full mt-3 py-2 rounded text-sm font-medium transition-colors ${
+                    asset.enabled
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                      : 'bg-slate-700/50 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  {asset.enabled ? 'View Scanner' : 'Scanner Disabled'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Info Section */}
+        <div className="bg-slate-800 rounded-lg p-4">
+          <h4 className="text-sm font-bold text-white mb-2">How Crypto Arbitrage Works</h4>
+          <div className="text-xs text-gray-400 space-y-2">
+            <p>
+              <strong className="text-white">1. Range Markets:</strong> Markets for price ranges like "Will BTC be between $90,000-$95,000?"
+              You buy YES on the range market.
+            </p>
+            <p>
+              <strong className="text-white">2. Threshold Markets:</strong> Markets for price thresholds like "Will BTC be ≥$90,000?" and "Will BTC be ≥$95,000?"
+              You buy NO on the lower threshold and YES on the upper threshold.
+            </p>
+            <p>
+              <strong className="text-white">3. Guaranteed Profit:</strong> If the range is $90k-$95k:
+              • If BTC &lt; $90k: Lower threshold NO pays $1
+              • If BTC $90k-$95k: Range YES pays $1
+              • If BTC ≥ $95k: Upper threshold YES pays $1
+            </p>
+            <p>
+              <strong className="text-white">4. Example:</strong> Range YES costs 35¢ + Lower NO costs 32¢ + Upper YES costs 31¢ = 98¢ total.
+              You spend 98¢ and receive $1.00 payout for a 2¢ guaranteed profit.
+            </p>
+            <p className="text-yellow-400 mt-3">
+              💡 The scanner automatically finds these opportunities when the total cost is less than 100¢.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Scanner Mode - Detailed View
   if (!status) {
     return (
       <div className="p-6 text-center">
-        <div className="text-red-400 mb-2">Could not connect to BTC Arbitrage Engine</div>
+        <div className="text-red-400 mb-2">Could not connect to Arbitrage Engine</div>
         <div className="text-gray-500 text-sm">
           Check that the backend is running on port 8001
         </div>
@@ -254,112 +458,110 @@ export function BTCArbitrageTab() {
   const activityLog = status?.activity_log || [];
   const stats = status?.stats || {};
 
+  // Stats for StatsBar
+  const statsData = [
+    { value: status?.total_scans || 0, label: 'Scans', color: 'text-yellow-400' },
+    { value: stats.ranges_checked || 0, label: 'Ranges', color: 'text-blue-400' },
+    { value: stats.thresholds_found || 0, label: 'Thresholds', color: 'text-purple-400' },
+    { value: stats.best_cost !== null ? `${stats.best_cost}¢` : '-', label: 'Best Cost', color: getCostColor(stats.best_cost) },
+    { value: stats.near_misses || 0, label: 'Near Miss', color: 'text-orange-400' },
+    { value: opportunities.length, label: 'Opps', color: 'text-green-400' }
+  ];
+
+  // Table columns for near-misses
+  const nearMissColumns = [
+    { key: 'range', label: 'Price Range', align: 'left' as const },
+    { key: 'range_yes', label: 'Range YES', align: 'right' as const },
+    { key: 'lower_no', label: 'Lower Thresh NO', align: 'right' as const },
+    { key: 'upper_yes', label: 'Upper Thresh YES', align: 'right' as const },
+    { key: 'total', label: 'Total Cost', align: 'right' as const, bold: true },
+    { key: 'edge', label: 'Edge', align: 'right' as const }
+  ];
+
+  const renderNearMissCell = (calc: Calculation, col: any) => {
+    switch (col.key) {
+      case 'range':
+        return (
+          <>
+            <div className="text-white font-medium">{calc.range_description}</div>
+            <span className="inline-block px-2 py-0.5 bg-blue-600/80 text-white text-xs rounded-full font-medium mt-1">
+              {calc.event_date}
+            </span>
+          </>
+        );
+      case 'range_yes':
+        return <span className="font-mono text-blue-400">{calc.range_yes_ask !== null ? `${calc.range_yes_ask}¢` : '-'}</span>;
+      case 'lower_no':
+        return <span className="font-mono text-purple-400">{calc.lower_thresh_no_cost !== null ? `${calc.lower_thresh_no_cost}¢` : '-'}</span>;
+      case 'upper_yes':
+        return <span className="font-mono text-cyan-400">{calc.upper_thresh_yes_ask !== null ? `${calc.upper_thresh_yes_ask}¢` : '-'}</span>;
+      case 'total':
+        return <span className={`font-mono font-bold ${getCostColor(calc.total_cost_cents)}`}>{calc.total_cost_cents !== null ? `${calc.total_cost_cents}¢` : '-'}</span>;
+      case 'edge':
+        return (
+          <span className={`font-mono ${calc.edge_cents !== null && calc.edge_cents > 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {calc.edge_cents !== null ? `${calc.edge_cents > 0 ? '+' : ''}${calc.edge_cents}¢` : '-'}
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const getNearMissRowClassName = (calc: Calculation) => {
+    if (calc.total_cost_cents !== null && calc.total_cost_cents < 100) {
+      return 'bg-green-900/40 hover:bg-green-900/50';
+    }
+    if (calc.total_cost_cents !== null && calc.total_cost_cents <= 101) {
+      return 'bg-yellow-900/40 hover:bg-yellow-900/50';
+    }
+    return '';
+  };
+
+  const currentAsset = cryptoAssets.find(a => a.id === selectedAsset);
+
   return (
-    <div className="p-4 space-y-4">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold text-white">BTC Arbitrage Scanner</h2>
-          <p className="text-sm text-gray-400">
-            {status?.is_running ? (
-              <span className="text-green-400">SCANNING (every {status?.config?.scan_interval_seconds ?? 2}s)</span>
-            ) : (
-              <span className="text-red-400">STOPPED</span>
-            )}
-            {status?.last_scan_at && (
-              <span className="ml-2">| Last: {getTimeAgo(status.last_scan_at)} ({status.last_scan_duration_ms}ms)</span>
-            )}
-          </p>
-        </div>
-        <div className={`px-3 py-1 rounded font-bold text-sm ${mode === 'paper' ? 'bg-blue-600' : 'bg-red-600'} text-white`}>
-          {mode === 'paper' ? 'PAPER' : 'LIVE'}
+    <div className="space-y-4">
+      {/* Back Button & Header */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={handleBackToOverview}
+          className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1"
+        >
+          ← Back to Overview
+        </button>
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">{currentAsset?.icon}</span>
+          <h3 className="text-lg font-bold text-white">{currentAsset?.name} Scanner</h3>
+          <div className={`px-3 py-1 rounded font-bold text-sm ${mode === 'paper' ? 'bg-blue-600' : 'bg-red-600'} text-white`}>
+            {mode === 'paper' ? 'PAPER' : 'LIVE'}
+          </div>
+          {status?.is_running ? (
+            <span className="text-green-400 text-sm">SCANNING (every {status?.config?.scan_interval_seconds ?? 2}s)</span>
+          ) : (
+            <span className="text-red-400 text-sm">STOPPED</span>
+          )}
+          {status?.last_scan_at && (
+            <span className="text-gray-400 text-sm">Last: {getTimeAgo(status.last_scan_at)} ({status.last_scan_duration_ms}ms)</span>
+          )}
         </div>
       </div>
 
       {/* Stats Bar */}
-      <div className="grid grid-cols-6 gap-2 bg-slate-800 rounded-lg p-3 text-center">
-        <div>
-          <div className="text-lg font-bold text-yellow-400">{status?.total_scans || 0}</div>
-          <div className="text-xs text-gray-500">Scans</div>
-        </div>
-        <div>
-          <div className="text-lg font-bold text-blue-400">{stats.ranges_checked || 0}</div>
-          <div className="text-xs text-gray-500">Ranges</div>
-        </div>
-        <div>
-          <div className="text-lg font-bold text-purple-400">{stats.thresholds_found || 0}</div>
-          <div className="text-xs text-gray-500">Thresholds</div>
-        </div>
-        <div>
-          <div className={`text-lg font-bold ${getCostColor(stats.best_cost)}`}>
-            {stats.best_cost !== null ? `${stats.best_cost}¢` : '-'}
-          </div>
-          <div className="text-xs text-gray-500">Best Cost</div>
-        </div>
-        <div>
-          <div className="text-lg font-bold text-orange-400">{stats.near_misses || 0}</div>
-          <div className="text-xs text-gray-500">Near Miss</div>
-        </div>
-        <div>
-          <div className="text-lg font-bold text-green-400">{opportunities.length}</div>
-          <div className="text-xs text-gray-500">Opps</div>
-        </div>
-      </div>
+      <StatsBar stats={statsData} />
 
-      {/* Configuration Row */}
-      <div className="bg-slate-800 rounded-lg p-3">
-        <div className="grid grid-cols-5 gap-3">
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Min Edge %</label>
-            <input
-              type="number"
-              value={minEdge}
-              onChange={(e) => handleMinEdgeChange(parseFloat(e.target.value) || 0)}
-              className="w-full bg-slate-700 text-white rounded px-2 py-1 text-sm border border-slate-600"
-              step="0.5"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Budget ($)</label>
-            <input
-              type="number"
-              value={budgetDollars}
-              onChange={(e) => handleBudgetChange(parseInt(e.target.value) || 0)}
-              className="w-full bg-slate-700 text-white rounded px-2 py-1 text-sm border border-slate-600"
-              step="10"
-              min="1"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Mode</label>
-            <select
-              value={mode}
-              onChange={(e) => handleModeChange(e.target.value as 'paper' | 'live')}
-              className="w-full bg-slate-700 text-white rounded px-2 py-1 text-sm border border-slate-600"
-            >
-              <option value="paper">Paper</option>
-              <option value="live">Live</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1">Auto-Trade</label>
-            <button
-              onClick={() => handleAutoTradeToggle(!autoTrade)}
-              className={`w-full py-1 rounded text-sm font-bold ${
-                autoTrade ? 'bg-green-600 text-white' : 'bg-slate-600 text-gray-300'
-              }`}
-            >
-              {autoTrade ? 'ON' : 'OFF'}
-            </button>
-          </div>
-          <div className="flex items-end">
-            <div className="text-xs text-gray-500">
-              Events: {(stats.event_dates || []).join(', ') || 'None'}
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Config Panel */}
+      <ConfigPanel
+        minEdge={minEdge}
+        budgetDollars={budgetDollars}
+        mode={mode}
+        autoTrade={autoTrade}
+        onMinEdgeChange={handleMinEdgeChange}
+        onBudgetChange={handleBudgetChange}
+        onModeChange={handleModeChange}
+        onAutoTradeToggle={handleAutoTradeToggle}
+        extraInfo={`Events: ${(stats.event_dates || []).join(', ') || 'None'}`}
+      />
 
       {/* Execution result */}
       {execResult && (
@@ -426,140 +628,44 @@ export function BTCArbitrageTab() {
               </div>
             )}
 
-            {nearMisses.length === 0 ? (
-              <div className="text-gray-500 text-center py-4">
-                No near-misses (cost 100-105¢) found
-                <div className="text-xs mt-2">Best cost: {stats.best_cost !== null ? `${stats.best_cost}¢` : '-'}</div>
-              </div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-400 border-b border-slate-600">
-                    <th className="pb-2 px-1">Price Range</th>
-                    <th className="pb-2 px-1 text-right">Range YES</th>
-                    <th className="pb-2 px-1 text-right">Lower Thresh NO</th>
-                    <th className="pb-2 px-1 text-right">Upper Thresh YES</th>
-                    <th className="pb-2 px-1 text-right font-bold">Total Cost</th>
-                    <th className="pb-2 px-1 text-right">Edge</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {nearMisses.map((calc, idx) => (
-                    <tr
-                      key={idx}
-                      onClick={() => copyTickersToClipboard(calc)}
-                      className={`border-b border-slate-700/50 cursor-pointer hover:bg-slate-700/50 transition-colors ${
-                        calc.total_cost_cents !== null && calc.total_cost_cents < 100
-                          ? 'bg-green-900/40 hover:bg-green-900/50'
-                          : calc.total_cost_cents !== null && calc.total_cost_cents <= 101
-                          ? 'bg-yellow-900/40 hover:bg-yellow-900/50'
-                          : ''
-                      }`}
-                    >
-                      <td className="py-2 px-1">
-                        <div className="text-white font-medium">{calc.range_description}</div>
-                        <span className="inline-block px-2 py-0.5 bg-blue-600/80 text-white text-xs rounded-full font-medium mt-1">
-                          {calc.event_date}
-                        </span>
-                      </td>
-                      <td className="py-2 px-1 text-right font-mono text-blue-400">
-                        {calc.range_yes_ask !== null ? `${calc.range_yes_ask}¢` : '-'}
-                      </td>
-                      <td className="py-2 px-1 text-right font-mono text-purple-400">
-                        {calc.lower_thresh_no_cost !== null ? `${calc.lower_thresh_no_cost}¢` : '-'}
-                      </td>
-                      <td className="py-2 px-1 text-right font-mono text-cyan-400">
-                        {calc.upper_thresh_yes_ask !== null ? `${calc.upper_thresh_yes_ask}¢` : '-'}
-                      </td>
-                      <td className={`py-2 px-1 text-right font-mono font-bold ${getCostColor(calc.total_cost_cents)}`}>
-                        {calc.total_cost_cents !== null ? `${calc.total_cost_cents}¢` : '-'}
-                      </td>
-                      <td className={`py-2 px-1 text-right font-mono ${
-                        calc.edge_cents !== null && calc.edge_cents > 0 ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        {calc.edge_cents !== null ? `${calc.edge_cents > 0 ? '+' : ''}${calc.edge_cents}¢` : '-'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            <div className="text-xs text-gray-500 mt-3 text-center">
-              Showing {nearMisses.length} near-misses (100-105¢) sorted by cost | Green = profitable (&lt;100¢) | Yellow = very close (≤101¢) | Click row to copy tickers
-            </div>
+            <OpportunityTable
+              columns={nearMissColumns}
+              data={nearMisses}
+              onRowClick={copyTickersToClipboard}
+              getRowClassName={getNearMissRowClassName}
+              renderCell={renderNearMissCell}
+              emptyMessage={
+                <div>
+                  No near-misses (cost 100-105¢) found
+                  <div className="text-xs mt-2">Best cost: {stats.best_cost !== null ? `${stats.best_cost}¢` : '-'}</div>
+                </div>
+              }
+              footerMessage={`Showing ${nearMisses.length} near-misses (100-105¢) sorted by cost | Green = profitable (<100¢) | Yellow = very close (≤101¢) | Click row to copy tickers`}
+            />
           </div>
         )}
 
         {activeTab === 'calculations' && (
-          <div>
-            {allCalculations.length === 0 ? (
-              <div className="text-gray-500 text-center py-4">No calculations yet - waiting for scan</div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-400 border-b border-slate-600">
-                    <th className="pb-2 px-1">Price Range</th>
-                    <th className="pb-2 px-1 text-right">Range YES</th>
-                    <th className="pb-2 px-1 text-right">Lower Thresh NO</th>
-                    <th className="pb-2 px-1 text-right">Upper Thresh YES</th>
-                    <th className="pb-2 px-1 text-right font-bold">Total Cost</th>
-                    <th className="pb-2 px-1 text-right">Edge</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allCalculations.map((calc, idx) => (
-                    <tr
-                      key={idx}
-                      onClick={() => copyTickersToClipboard(calc)}
-                      className={`border-b border-slate-700/50 cursor-pointer hover:bg-slate-700/50 transition-colors ${
-                        calc.total_cost_cents !== null && calc.total_cost_cents < 100
-                          ? 'bg-green-900/40 hover:bg-green-900/50'
-                          : calc.total_cost_cents !== null && calc.total_cost_cents <= 101
-                          ? 'bg-yellow-900/40 hover:bg-yellow-900/50'
-                          : calc.total_cost_cents !== null && calc.total_cost_cents <= 105
-                          ? 'bg-yellow-900/20 hover:bg-yellow-900/30'
-                          : ''
-                      }`}
-                    >
-                      <td className="py-2 px-1">
-                        <div className="text-white font-medium">{calc.range_description}</div>
-                        <span className="inline-block px-2 py-0.5 bg-blue-600/80 text-white text-xs rounded-full font-medium mt-1">
-                          {calc.event_date}
-                        </span>
-                      </td>
-                      <td className="py-2 px-1 text-right font-mono text-blue-400">
-                        {calc.range_yes_ask !== null ? `${calc.range_yes_ask}¢` : '-'}
-                      </td>
-                      <td className="py-2 px-1 text-right font-mono text-purple-400">
-                        {calc.lower_thresh_no_cost !== null ? `${calc.lower_thresh_no_cost}¢` : '-'}
-                      </td>
-                      <td className="py-2 px-1 text-right font-mono text-cyan-400">
-                        {calc.upper_thresh_yes_ask !== null ? `${calc.upper_thresh_yes_ask}¢` : '-'}
-                      </td>
-                      <td className={`py-2 px-1 text-right font-mono font-bold ${getCostColor(calc.total_cost_cents)}`}>
-                        {calc.total_cost_cents !== null ? `${calc.total_cost_cents}¢` : '-'}
-                      </td>
-                      <td className={`py-2 px-1 text-right font-mono ${
-                        calc.edge_cents !== null && calc.edge_cents > 0 ? 'text-green-400' : 'text-red-400'
-                      }`}>
-                        {calc.edge_cents !== null ? `${calc.edge_cents > 0 ? '+' : ''}${calc.edge_cents}¢` : '-'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            <div className="text-xs text-gray-500 mt-3 text-center">
-              Sorted by total cost (lowest first) | Green = profitable (&lt;100¢) | Yellow = near-miss | Click row to copy tickers
-            </div>
-          </div>
+          <OpportunityTable
+            columns={nearMissColumns}
+            data={allCalculations}
+            onRowClick={copyTickersToClipboard}
+            getRowClassName={(calc) => {
+              if (calc.total_cost_cents !== null && calc.total_cost_cents < 100) return 'bg-green-900/40 hover:bg-green-900/50';
+              if (calc.total_cost_cents !== null && calc.total_cost_cents <= 101) return 'bg-yellow-900/40 hover:bg-yellow-900/50';
+              if (calc.total_cost_cents !== null && calc.total_cost_cents <= 105) return 'bg-yellow-900/20 hover:bg-yellow-900/30';
+              return '';
+            }}
+            renderCell={renderNearMissCell}
+            emptyMessage="No calculations yet - waiting for scan"
+            footerMessage={`Sorted by total cost (lowest first) | Green = profitable (<100¢) | Yellow = near-miss | Click row to copy tickers`}
+          />
         )}
 
         {activeTab === 'markets' && (
           <div className="grid grid-cols-2 gap-4">
-            {/* Range Markets */}
             <div>
-              <h4 className="text-sm font-bold text-blue-400 mb-2">KXBTC Range Markets ({rangeMarkets.length})</h4>
+              <h4 className="text-sm font-bold text-blue-400 mb-2">{currentAsset?.series} Range Markets ({rangeMarkets.length})</h4>
               <div className="space-y-1 max-h-72 overflow-y-auto">
                 {rangeMarkets.map((mkt, idx) => (
                   <div key={idx} className="flex justify-between text-xs bg-slate-700/50 px-2 py-1 rounded">
@@ -570,9 +676,8 @@ export function BTCArbitrageTab() {
                 {rangeMarkets.length === 0 && <div className="text-gray-500 text-center py-2">No range markets</div>}
               </div>
             </div>
-            {/* Threshold Markets */}
             <div>
-              <h4 className="text-sm font-bold text-purple-400 mb-2">KXBTCD Threshold Markets ({thresholdMarkets.length})</h4>
+              <h4 className="text-sm font-bold text-purple-400 mb-2">{currentAsset?.thresholdSeries} Threshold Markets ({thresholdMarkets.length})</h4>
               <div className="space-y-1 max-h-72 overflow-y-auto">
                 {thresholdMarkets.map((mkt, idx) => (
                   <div key={idx} className="flex justify-between text-xs bg-slate-700/50 px-2 py-1 rounded">
@@ -663,4 +768,4 @@ export function BTCArbitrageTab() {
   );
 }
 
-export default BTCArbitrageTab;
+export default CryptoArbitrageSection;

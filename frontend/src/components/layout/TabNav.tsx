@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 
-type Tab = 'btc-arb' | 'trade' | 'portfolio' | 'watchlist' | 'opportunities' | 'trading' | 'analytics' | 'autotrader';
+type Tab = 'arbitrage' | 'trade' | 'portfolio' | 'watchlist' | 'opportunities' | 'trading' | 'analytics' | 'autotrader';
 
 interface Props {
   activeTab: Tab;
@@ -9,11 +9,11 @@ interface Props {
 
 export function TabNav({ activeTab, onTabChange }: Props) {
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'btc-arb', label: '₿ BTC Arb' },
+    { id: 'arbitrage', label: '⚡ Arbitrage' },
     { id: 'trade', label: 'Trade' },
     { id: 'portfolio', label: 'Portfolio' },
     { id: 'watchlist', label: 'Watchlist' },
-    { id: 'opportunities', label: 'Arbitrage' },
+    { id: 'opportunities', label: 'Old Arb' },
     { id: 'trading', label: 'Old Trading' },
     { id: 'analytics', label: 'Analytics' },
     { id: 'autotrader', label: 'Auto-Trader' },

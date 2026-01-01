@@ -33,7 +33,8 @@
       "Bash(else)",
       "Bash(fi)",
       "Bash(done)",
-      "Bash(for file in \"btc_arb_engine.py\" \"btc_arb_scanner.py\" \"routes.py\")"
+      "Bash(for file in \"btc_arb_engine.py\" \"btc_arb_scanner.py\" \"routes.py\")",
+      "Bash(npm run build:*)"
     ]
   }
 }

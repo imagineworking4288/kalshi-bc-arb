@@ -8,14 +8,14 @@ import { TradeTab } from './components/trade/TradeTab';
 import { PortfolioTab } from './components/portfolio/PortfolioTab';
 import { WatchlistTab } from './components/watchlist/WatchlistTab';
 import { AutoTraderTab } from './components/autotrader/AutoTraderTab';
-import { BTCArbitrageTab } from './components/btcarb/BTCArbitrageTab';
+import { ArbitrageHub } from './components/arbitrage/ArbitrageHub';
 import { useTradingStore } from './stores/tradingStore';
 import { api } from './services/api';
 
-type Tab = 'btc-arb' | 'trade' | 'portfolio' | 'watchlist' | 'opportunities' | 'trading' | 'analytics' | 'autotrader';
+type Tab = 'arbitrage' | 'trade' | 'portfolio' | 'watchlist' | 'opportunities' | 'trading' | 'analytics' | 'autotrader';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('btc-arb');
+  const [activeTab, setActiveTab] = useState<Tab>('arbitrage');
   const setBalance = useTradingStore((s) => s.setBalance);
   const setMode = useTradingStore((s) => s.setMode);
 
@@ -41,7 +41,7 @@ function App() {
       <TabNav activeTab={activeTab} onTabChange={setActiveTab} />
 
       <main className="container mx-auto px-4 py-6">
-        {activeTab === 'btc-arb' && <BTCArbitrageTab />}
+        {activeTab === 'arbitrage' && <ArbitrageHub />}
         {activeTab === 'trade' && <TradeTab />}
         {activeTab === 'portfolio' && <PortfolioTab />}
         {activeTab === 'watchlist' && <WatchlistTab />}
