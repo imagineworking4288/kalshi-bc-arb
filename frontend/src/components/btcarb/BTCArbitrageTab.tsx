@@ -140,7 +140,30 @@ export function BTCArbitrageTab() {
     return `${Math.floor(seconds / 60)}m ago`;
   };
 
-  if (loading) return <div className="p-6 text-gray-400">Loading arbitrage engine...</div>;
+  if (loading) {
+    return (
+      <div className="p-6 text-center">
+        <div className="text-gray-400">Loading arbitrage engine...</div>
+      </div>
+    );
+  }
+
+  if (!status) {
+    return (
+      <div className="p-6 text-center">
+        <div className="text-red-400 mb-2">⚠️ Could not connect to BTC Arbitrage Engine</div>
+        <div className="text-gray-500 text-sm">
+          Check that the backend is running on port 8000
+        </div>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 bg-slate-700 rounded hover:bg-slate-600 text-white"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   const opportunities = status?.opportunities || [];
 
@@ -152,7 +175,7 @@ export function BTCArbitrageTab() {
           <h2 className="text-2xl font-bold text-white">BTC Arbitrage Scanner</h2>
           <p className="text-sm text-gray-400">
             {status?.is_running ? (
-              <span className="text-green-400">● SCANNING (every {status.config.scan_interval_seconds}s)</span>
+              <span className="text-green-400">● SCANNING (every {status?.config?.scan_interval_seconds ?? 2}s)</span>
             ) : (
               <span className="text-red-400">○ STOPPED</span>
             )}
@@ -257,7 +280,7 @@ export function BTCArbitrageTab() {
         {opportunities.length === 0 ? (
           <div className="bg-slate-800 rounded-lg p-8 text-center border border-slate-700">
             <p className="text-gray-400">No opportunities above {minEdge}% edge</p>
-            <p className="text-sm text-gray-500 mt-2">Scanner checking every {status?.config.scan_interval_seconds}s...</p>
+            <p className="text-sm text-gray-500 mt-2">Scanner checking every {status?.config?.scan_interval_seconds ?? 2}s...</p>
           </div>
         ) : (
           <div className="space-y-4">

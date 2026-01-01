@@ -66,17 +66,14 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 
 | File | Description |
 |------|-------------|
-| .env | Environment variables for API keys |
-| .env.example | Template for environment setup |
-| .gitignore | Git ignore patterns |
 | README.md | Project documentation and setup |
-| docker-compose.yml | Docker container orchestration config |
+| MVP_IMPLEMENTATION.md | Implementation guide and roadmap |
+| .claude/settings.local.json | Claude configuration settings |
 | backend/main.py | FastAPI app entry point |
 | backend/config.py | Settings from environment variables |
-| backend/requirements.txt | Python package dependencies |
 | diagnose_kalshi.py | Legacy Kalshi API test script |
 | diagnose_kalshi_v2.py | Updated API diagnostic with auth tests |
-| start.bat | Windows batch script to start servers |
+| package-lock.json | NPM dependency lock file |
 | backend/api/__init__.py | API module exports |
 | backend/api/routes.py | REST API endpoint handlers |
 | backend/api/websocket.py | WebSocket connection manager |
@@ -101,8 +98,6 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/services/btc_arb_engine.py | Continuous BTC arbitrage scanning engine |
 | backend/utils/__init__.py | Utils module exports |
 | backend/utils/kalshi_auth.py | RSA-PSS signature authentication |
-| data/.gitkeep | Placeholder for SQLite database |
-| keys/.gitkeep | Placeholder for API key files |
 | keys/kalshi-private-key.pem | RSA private key for Kalshi |
 | frontend/index.html | Main HTML template |
 | frontend/package.json | NPM dependencies and scripts |
