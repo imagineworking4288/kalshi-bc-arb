@@ -650,3 +650,91 @@ async def get_btc_arb_executions(limit: int = 50):
         rows = await cursor.fetchall()
         columns = [d[0] for d in cursor.description]
         return {'executions': [dict(zip(columns, row)) for row in rows]}
+
+
+@router.get("/btc-arb/raw-markets")
+async def get_raw_btc_markets():
+    """Diagnostic: Get raw market data from KXBTC and KXBTCD series."""
+    kxbtc_markets = await kalshi.get_markets(series_ticker="KXBTC", status="open")
+    kxbtcd_markets = await kalshi.get_markets(series_ticker="KXBTCD", status="open")
+
+    if isinstance(kxbtc_markets, dict):
+        kxbtc_markets = kxbtc_markets.get('markets', [])
+    if isinstance(kxbtcd_markets, dict):
+        kxbtcd_markets = kxbtcd_markets.get('markets', [])
+
+    # Get sample of each with key fields
+    def simplify(m):
+        return {
+            'ticker': m.get('ticker'),
+            'title': m.get('title'),
+            'subtitle': m.get('subtitle'),
+            'yes_bid': m.get('yes_bid'),
+            'yes_ask': m.get('yes_ask'),
+            'status': m.get('status')
+        }
+
+    return {
+        'kxbtc': {
+            'total': len(kxbtc_markets),
+            'sample': [simplify(m) for m in kxbtc_markets[:10]]
+        },
+        'kxbtcd': {
+            'total': len(kxbtcd_markets),
+            'sample': [simplify(m) for m in kxbtcd_markets[:10]]
+        },
+        'all_kxbtc_tickers': [m.get('ticker') for m in kxbtc_markets[:30]],
+        'all_kxbtcd_tickers': [m.get('ticker') for m in kxbtcd_markets[:30]]
+    }
+
+
+@router.get("/btc-arb/ticker-patterns")
+async def get_ticker_patterns():
+    """Analyze ticker patterns in BTC markets."""
+    kxbtc = await kalshi.get_markets(series_ticker="KXBTC", status="open")
+    kxbtcd = await kalshi.get_markets(series_ticker="KXBTCD", status="open")
+
+    if isinstance(kxbtc, dict):
+        kxbtc = kxbtc.get('markets', [])
+    if isinstance(kxbtcd, dict):
+        kxbtcd = kxbtcd.get('markets', [])
+
+    # Categorize by pattern
+    kxbtc_patterns = {'B_tickers': [], 'T_tickers': [], 'other': []}
+    for m in kxbtc:
+        ticker = m.get('ticker', '')
+        if '-B' in ticker:
+            kxbtc_patterns['B_tickers'].append(ticker)
+        elif '-T' in ticker:
+            kxbtc_patterns['T_tickers'].append(ticker)
+        else:
+            kxbtc_patterns['other'].append(ticker)
+
+    kxbtcd_patterns = {'B_tickers': [], 'T_tickers': [], 'other': []}
+    for m in kxbtcd:
+        ticker = m.get('ticker', '')
+        if '-B' in ticker:
+            kxbtcd_patterns['B_tickers'].append(ticker)
+        elif '-T' in ticker:
+            kxbtcd_patterns['T_tickers'].append(ticker)
+        else:
+            kxbtcd_patterns['other'].append(ticker)
+
+    return {
+        'kxbtc': {
+            'total': len(kxbtc),
+            'B_count': len(kxbtc_patterns['B_tickers']),
+            'T_count': len(kxbtc_patterns['T_tickers']),
+            'other_count': len(kxbtc_patterns['other']),
+            'sample_B': kxbtc_patterns['B_tickers'][:5],
+            'sample_T': kxbtc_patterns['T_tickers'][:5]
+        },
+        'kxbtcd': {
+            'total': len(kxbtcd),
+            'B_count': len(kxbtcd_patterns['B_tickers']),
+            'T_count': len(kxbtcd_patterns['T_tickers']),
+            'other_count': len(kxbtcd_patterns['other']),
+            'sample_B': kxbtcd_patterns['B_tickers'][:5],
+            'sample_T': kxbtcd_patterns['T_tickers'][:5]
+        }
+    }

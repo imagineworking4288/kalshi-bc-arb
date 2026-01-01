@@ -59,6 +59,8 @@ HTTP REST API endpoints for opportunities and trading
 | start_btc_arb | - | dict | Start BTC arbitrage engine |
 | stop_btc_arb | - | dict | Stop BTC arbitrage engine |
 | get_btc_arb_executions | limit: int = 50 | dict | Get BTC arbitrage execution history |
+| get_raw_btc_markets | - | dict | Diagnostic: Get raw market data from KXBTC and KXBTCD series |
+| get_ticker_patterns | - | dict | Diagnostic: Analyze ticker patterns in BTC markets with format breakdown |
 
 ### websocket.py
 WebSocket connection manager for real-time updates
@@ -259,6 +261,8 @@ BTC arbitrage opportunity detection between range and threshold markets
 | BTCArbitrageScanner._simplify_markets | markets: List[Dict], market_type: str | List[SimplifiedMarket] | Extract key fields from markets for UI display |
 | BTCArbitrageScanner._calculate_arbitrage | range_mkt, thresh_lookup, event_date, min_edge | CalculationResult | Calculate arbitrage for single range with detailed breakdown |
 | BTCArbitrageScanner._build_opportunity | range_mkt, thresh_lookup, event_date, calc | ArbOpportunity? | Build opportunity from profitable calculation result |
+| BTCArbitrageScanner._build_threshold_lookup | thresholds: List[Dict] | Dict[float, Dict] | Build lookup of threshold markets by floor_strike with fuzzy keys |
+| BTCArbitrageScanner._find_threshold | strike: float, lookup: Dict[float, Dict] | Optional[Dict] | Find threshold market with fuzzy matching on strike price |
 | BTCArbitrageScanner.get_last_scan_result | - | ScanResult? | Get most recent complete scan result with all data |
 | BTCArbitrageScanner.calculate_trade | opportunity, budget_cents | dict | Calculate trade details for given budget |
 | BTCArbitrageScanner.get_stats | - | dict | Get scanner performance statistics |
