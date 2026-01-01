@@ -738,3 +738,149 @@ async def get_ticker_patterns():
             'sample_T': kxbtcd_patterns['T_tickers'][:5]
         }
     }
+
+
+@router.get("/btc-arb/debug")
+async def get_btc_arb_debug():
+    """
+    Debug endpoint: Shows detailed diagnostic info about the arbitrage scanner.
+
+    Returns:
+    - Markets from each series (KXBTC, KXBTCD)
+    - Settlement times found for ranges and thresholds
+    - Common settlement times (where arbitrage can exist)
+    - Sample calculations showing why opportunities were/weren't found
+    """
+    from collections import defaultdict
+
+    # Fetch from both series using events API (same as scanner)
+    all_markets = []
+    series_stats = {}
+
+    for series in ["KXBTC", "KXBTCD"]:
+        try:
+            events = await kalshi.get_events(
+                series_ticker=series,
+                status="open",
+                with_nested_markets=True,
+                limit=100
+            )
+
+            series_markets = []
+            for event in events:
+                for market in event.get("markets", []):
+                    market["_series"] = series
+                    market["_expiration"] = market.get("expiration_time") or market.get("close_time")
+                    series_markets.append(market)
+
+            all_markets.extend(series_markets)
+            series_stats[series] = {
+                'events': len(events),
+                'total_markets': len(series_markets),
+                'ranges': len([m for m in series_markets if '-B' in m.get('ticker', '')]),
+                'thresholds': len([m for m in series_markets if '-T' in m.get('ticker', '')])
+            }
+        except Exception as e:
+            series_stats[series] = {'error': str(e)}
+
+    # Separate by type
+    range_markets = [m for m in all_markets if '-B' in m.get('ticker', '')]
+    threshold_markets = [m for m in all_markets if '-T' in m.get('ticker', '')]
+
+    # Group by settlement time
+    def group_by_settlement(markets):
+        groups = defaultdict(list)
+        for m in markets:
+            exp = m.get('_expiration', '')[:16] if m.get('_expiration') else ''
+            if exp:
+                groups[exp].append(m.get('ticker'))
+        return dict(groups)
+
+    range_settlements = group_by_settlement(range_markets)
+    threshold_settlements = group_by_settlement(threshold_markets)
+
+    # Find common
+    common = set(range_settlements.keys()) & set(threshold_settlements.keys())
+
+    # Sample calculation for first common settlement
+    sample_calc = None
+    if common:
+        first_settlement = sorted(common)[0]
+        first_range = [m for m in range_markets if (m.get('_expiration') or '')[:16] == first_settlement]
+        first_thresh = [m for m in threshold_markets if (m.get('_expiration') or '')[:16] == first_settlement]
+
+        if first_range and first_thresh:
+            r = first_range[0]
+            floor = r.get('floor_strike')
+            cap = r.get('cap_strike')
+
+            # Find matching thresholds
+            lower_t = None
+            upper_t = None
+            for t in first_thresh:
+                strike = t.get('floor_strike')
+                if strike is not None:
+                    if abs(strike - floor) < 1 or abs(strike - (floor - 0.01)) < 1:
+                        lower_t = t
+                    if abs(strike - (cap + 0.01)) < 1 or abs(strike - round(cap + 1)) < 1:
+                        upper_t = t
+
+            sample_calc = {
+                'settlement': first_settlement,
+                'range': {
+                    'ticker': r.get('ticker'),
+                    'floor_strike': floor,
+                    'cap_strike': cap,
+                    'yes_ask': r.get('yes_ask')
+                },
+                'lower_threshold': {
+                    'ticker': lower_t.get('ticker') if lower_t else None,
+                    'floor_strike': lower_t.get('floor_strike') if lower_t else None,
+                    'yes_bid': lower_t.get('yes_bid') if lower_t else None,
+                    'no_cost': 100 - lower_t.get('yes_bid') if lower_t and lower_t.get('yes_bid') else None
+                } if lower_t else 'NOT FOUND',
+                'upper_threshold': {
+                    'ticker': upper_t.get('ticker') if upper_t else None,
+                    'floor_strike': upper_t.get('floor_strike') if upper_t else None,
+                    'yes_ask': upper_t.get('yes_ask') if upper_t else None
+                } if upper_t else 'NOT FOUND'
+            }
+
+            # Calculate total if we have all prices
+            if lower_t and upper_t:
+                range_ask = r.get('yes_ask')
+                lower_bid = lower_t.get('yes_bid')
+                upper_ask = upper_t.get('yes_ask')
+                if all([range_ask, lower_bid, upper_ask]):
+                    total = range_ask + (100 - lower_bid) + upper_ask
+                    sample_calc['total_cost_cents'] = total
+                    sample_calc['edge_cents'] = 100 - total
+                    sample_calc['is_profitable'] = total < 100
+
+    return {
+        'series_stats': series_stats,
+        'totals': {
+            'ranges': len(range_markets),
+            'thresholds': len(threshold_markets)
+        },
+        'settlement_times': {
+            'range_count': len(range_settlements),
+            'threshold_count': len(threshold_settlements),
+            'common_count': len(common),
+            'common_times': sorted(list(common))[:10],
+            'sample_range_times': sorted(list(range_settlements.keys()))[:5],
+            'sample_threshold_times': sorted(list(threshold_settlements.keys()))[:5]
+        },
+        'sample_calculation': sample_calc,
+        'diagnosis': {
+            'has_ranges': len(range_markets) > 0,
+            'has_thresholds': len(threshold_markets) > 0,
+            'has_common_settlements': len(common) > 0,
+            'issue': (
+                'No ranges found' if not range_markets else
+                'No thresholds found' if not threshold_markets else
+                'No common settlement times - ranges and thresholds expire at different times' if not common else
+                'OK - common settlements found, check calculations'
+            )
+        }
+    }

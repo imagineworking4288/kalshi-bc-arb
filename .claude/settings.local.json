@@ -34,7 +34,13 @@
       "Bash(fi)",
       "Bash(done)",
       "Bash(for file in \"btc_arb_engine.py\" \"btc_arb_scanner.py\" \"routes.py\")",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(..venvScriptspython.exe -c \"\nimport asyncio\nimport sys\nsys.path.insert\\(0, ''backend''\\)\nfrom services.kalshi_client import KalshiClient\n\nasync def main\\(\\):\n    client = KalshiClient\\(\\)\n    balance = await client.get_balance\\(\\)\n    print\\(''Raw Kalshi balance response:''\\)\n    for key, value in balance.items\\(\\):\n        print\\(f''  {key}: {value} \\(type: {type\\(value\\).__name__}\\)''\\)\n\nasyncio.run\\(main\\(\\)\\)\n\")",
+      "Bash(powershell -Command \"Stop-Process -Id 21632 -Force\")",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 8000 | Select-Object OwningProcess\")",
+      "Bash(powershell -Command \"Get-Process -Id 21632 | Format-List Name,Id,Path\")",
+      "Bash(powershell:*)",
+      "Bash(./backend/venv/Scripts/python.exe -m uvicorn:*)"
     ]
   }
 }

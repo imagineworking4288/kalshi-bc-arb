@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { api } from '../../services/api';
 
 interface PortfolioSummary {
@@ -30,26 +30,30 @@ interface Order {
   created_at: string;
 }
 
+type ModeFilter = 'all' | 'paper' | 'live';
+
 export function PortfolioTab() {
   const [summary, setSummary] = useState<PortfolioSummary | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [selectedMode, setSelectedMode] = useState<string>('all');
+  const [positionFilter, setPositionFilter] = useState<ModeFilter>('all');
+  const [orderFilter, setOrderFilter] = useState<ModeFilter>('all');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, [selectedMode]);
-
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     try {
       const [summaryData, positionsData, ordersData] = await Promise.all([
         api.getPortfolioSummary(),
         api.getPortfolioPositions(),
-        api.getPortfolioOrders(selectedMode === 'all' ? undefined : selectedMode)
+        api.getPortfolioOrders(orderFilter === 'all' ? undefined : orderFilter)
       ]);
 
       setSummary(summaryData);
@@ -59,8 +63,22 @@ export function PortfolioTab() {
       setError(err.message);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  }, [orderFilter]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleRefresh = () => {
+    loadData(true);
   };
+
+  // Filter positions based on selected mode
+  const filteredPositions = positions.filter(pos =>
+    positionFilter === 'all' || pos.mode === positionFilter
+  );
 
   if (loading) {
     return <div className="text-center py-8">Loading portfolio...</div>;
@@ -109,26 +127,75 @@ export function PortfolioTab() {
 
       {/* Positions */}
       <div className="bg-gray-800 rounded-lg p-6">
-        <h2 className="text-xl font-bold mb-4">Positions</h2>
-        {positions.length === 0 ? (
-          <p className="text-gray-400 text-center py-4">No positions yet</p>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">Positions</h2>
+
+          <div className="flex items-center gap-4">
+            {/* Position Filter */}
+            <div className="flex gap-2">
+              {(['all', 'paper', 'live'] as const).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setPositionFilter(filter)}
+                  className={`px-3 py-1 rounded text-sm capitalize ${
+                    positionFilter === filter
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+
+            {/* Refresh Button */}
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className={`px-3 py-1 rounded text-sm flex items-center gap-2 ${
+                refreshing
+                  ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              <span className={refreshing ? 'animate-spin' : ''}>&#x21bb;</span>
+              {refreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
+        </div>
+
+        {filteredPositions.length === 0 ? (
+          <p className="text-gray-400 text-center py-4">
+            {positions.length === 0
+              ? 'No positions yet'
+              : `No ${positionFilter} positions`}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-gray-700">
                 <tr className="text-left text-sm text-gray-400">
+                  <th className="pb-2">Source</th>
                   <th className="pb-2">Ticker</th>
                   <th className="pb-2">Side</th>
                   <th className="pb-2">Contracts</th>
                   <th className="pb-2">Avg Price</th>
                   <th className="pb-2">Total Cost</th>
-                  <th className="pb-2">Mode</th>
                   <th className="pb-2">Created</th>
                 </tr>
               </thead>
               <tbody>
-                {positions.map((pos, idx) => (
+                {filteredPositions.map((pos, idx) => (
                   <tr key={idx} className="border-b border-gray-700/50">
+                    <td className="py-3">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        pos.mode === 'paper'
+                          ? 'bg-blue-900/30 text-blue-400 border border-blue-500/30'
+                          : 'bg-green-900/30 text-green-400 border border-green-500/30'
+                      }`}>
+                        {pos.mode.toUpperCase()}
+                      </span>
+                    </td>
                     <td className="py-3 font-mono text-sm">{pos.ticker}</td>
                     <td className="py-3">
                       <span className={pos.side === 'yes' ? 'text-green-400' : 'text-red-400'}>
@@ -138,17 +205,8 @@ export function PortfolioTab() {
                     <td className="py-3">{pos.contracts}</td>
                     <td className="py-3">${pos.avg_price.toFixed(2)}</td>
                     <td className="py-3">${pos.total_cost.toFixed(2)}</td>
-                    <td className="py-3">
-                      <span className={`px-2 py-1 rounded text-xs ${
-                        pos.mode === 'paper'
-                          ? 'bg-blue-900/30 text-blue-400'
-                          : 'bg-green-900/30 text-green-400'
-                      }`}>
-                        {pos.mode}
-                      </span>
-                    </td>
                     <td className="py-3 text-sm text-gray-400">
-                      {new Date(pos.created_at).toLocaleDateString()}
+                      {pos.created_at ? new Date(pos.created_at).toLocaleDateString() : '-'}
                     </td>
                   </tr>
                 ))}
@@ -165,52 +223,37 @@ export function PortfolioTab() {
 
           {/* Mode Filter */}
           <div className="flex gap-2">
-            <button
-              onClick={() => setSelectedMode('all')}
-              className={`px-3 py-1 rounded text-sm ${
-                selectedMode === 'all'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-              }`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setSelectedMode('paper')}
-              className={`px-3 py-1 rounded text-sm ${
-                selectedMode === 'paper'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-              }`}
-            >
-              Paper
-            </button>
-            <button
-              onClick={() => setSelectedMode('live')}
-              className={`px-3 py-1 rounded text-sm ${
-                selectedMode === 'live'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-              }`}
-            >
-              Live
-            </button>
+            {(['all', 'paper', 'live'] as const).map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setOrderFilter(filter)}
+                className={`px-3 py-1 rounded text-sm capitalize ${
+                  orderFilter === filter
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                }`}
+              >
+                {filter}
+              </button>
+            ))}
           </div>
         </div>
 
         {orders.length === 0 ? (
-          <p className="text-gray-400 text-center py-4">No orders yet</p>
+          <p className="text-gray-400 text-center py-4">
+            {orderFilter === 'all' ? 'No orders yet' : `No ${orderFilter} orders`}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-gray-700">
                 <tr className="text-left text-sm text-gray-400">
+                  <th className="pb-2">Source</th>
                   <th className="pb-2">Ticker</th>
                   <th className="pb-2">Side</th>
                   <th className="pb-2">Action</th>
                   <th className="pb-2">Count</th>
                   <th className="pb-2">Price</th>
-                  <th className="pb-2">Mode</th>
                   <th className="pb-2">Status</th>
                   <th className="pb-2">Created</th>
                 </tr>
@@ -218,6 +261,15 @@ export function PortfolioTab() {
               <tbody>
                 {orders.map((order) => (
                   <tr key={order.id} className="border-b border-gray-700/50">
+                    <td className="py-3">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        order.mode === 'paper'
+                          ? 'bg-blue-900/30 text-blue-400 border border-blue-500/30'
+                          : 'bg-green-900/30 text-green-400 border border-green-500/30'
+                      }`}>
+                        {order.mode.toUpperCase()}
+                      </span>
+                    </td>
                     <td className="py-3 font-mono text-sm">{order.ticker}</td>
                     <td className="py-3">
                       <span className={order.side === 'yes' ? 'text-green-400' : 'text-red-400'}>
@@ -227,15 +279,6 @@ export function PortfolioTab() {
                     <td className="py-3 capitalize">{order.action}</td>
                     <td className="py-3">{order.count}</td>
                     <td className="py-3">${(order.price_cents / 100).toFixed(2)}</td>
-                    <td className="py-3">
-                      <span className={`px-2 py-1 rounded text-xs ${
-                        order.mode === 'paper'
-                          ? 'bg-blue-900/30 text-blue-400'
-                          : 'bg-green-900/30 text-green-400'
-                      }`}>
-                        {order.mode}
-                      </span>
-                    </td>
                     <td className="py-3">
                       <span className={`px-2 py-1 rounded text-xs ${
                         order.status === 'filled'
@@ -248,7 +291,7 @@ export function PortfolioTab() {
                       </span>
                     </td>
                     <td className="py-3 text-sm text-gray-400">
-                      {new Date(order.created_at).toLocaleString()}
+                      {order.created_at ? new Date(order.created_at).toLocaleString() : '-'}
                     </td>
                   </tr>
                 ))}

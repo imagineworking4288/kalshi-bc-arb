@@ -1,11 +1,14 @@
 """
 BTC Arbitrage Scanner
-Finds guaranteed-profit arbitrage between KXBTC (range) and KXBTCD (threshold) markets.
+Finds guaranteed-profit arbitrage between BTC range (-B) and threshold (-T) markets.
+
+FIXED: Now fetches from BOTH KXBTC and KXBTCD series, groups by settlement time instead of ticker pattern.
 """
 
 import re
 import uuid
 import asyncio
+from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
@@ -112,6 +115,7 @@ class SimplifiedMarket:
     no_bid: Optional[int]
     description: str
     event_date: str
+    series: str = ""  # Track which series it came from
 
     def to_dict(self):
         return asdict(self)
@@ -163,44 +167,23 @@ class BTCArbitrageScanner:
             'near_misses': 0,
             'missing_prices': 0,
             'missing_thresholds': 0,
-            'event_dates': []
+            'settlement_times': [],
+            'series_stats': {},
+            'event_dates': []  # Legacy field for compatibility
         }
 
         try:
-            logger.info("📊 Starting market scan...")
+            logger.info("=" * 60)
+            logger.info("📊 Starting BTC arbitrage scan (FIXED: all series + settlement matching)")
+            logger.info("=" * 60)
 
-            # Fetch markets in parallel for speed
-            range_markets, threshold_markets = await asyncio.gather(
-                self._fetch_range_markets(),
-                self._fetch_threshold_markets()
-            )
+            # Fetch from ALL series, separate into ranges and thresholds
+            range_markets, threshold_markets, series_stats = await self._fetch_all_btc_markets()
 
-            logger.info(f"📊 Fetched {len(range_markets)} range markets, {len(threshold_markets)} threshold markets")
+            stats['series_stats'] = series_stats
+            stats['thresholds_found'] = len(threshold_markets)
 
-            # ONE-TIME DIAGNOSTIC: Dump first market from each series on first scan
-            if self._scan_count == 0:
-                import json
-                logger.info("=" * 60)
-                logger.info("RAW MARKET DATA DUMP (first scan only)")
-                logger.info("=" * 60)
-
-                if range_markets:
-                    logger.info(f"SAMPLE RANGE MARKET (1 of {len(range_markets)}):")
-                    logger.info(json.dumps(range_markets[0], indent=2, default=str))
-
-                if threshold_markets:
-                    logger.info(f"SAMPLE THRESHOLD MARKET (1 of {len(threshold_markets)}):")
-                    logger.info(json.dumps(threshold_markets[0], indent=2, default=str))
-
-                logger.info("=" * 60)
-
-            # Debug: Log sample tickers to see actual format
-            if range_markets:
-                sample_range = range_markets[0].get('ticker', 'NO TICKER')
-                logger.info(f"📋 Sample range ticker: {sample_range}")
-            if threshold_markets:
-                sample_thresh = threshold_markets[0].get('ticker', 'NO TICKER')
-                logger.info(f"📋 Sample threshold ticker: {sample_thresh}")
+            logger.info(f"📊 Total: {len(range_markets)} ranges, {len(threshold_markets)} thresholds")
 
             if not range_markets or not threshold_markets:
                 logger.warning("⚠️ No markets found - check API connection")
@@ -210,42 +193,45 @@ class BTCArbitrageScanner:
             # Simplify markets for UI
             range_markets_simplified = self._simplify_markets(range_markets, 'range')
             threshold_markets_simplified = self._simplify_markets(threshold_markets, 'threshold')
-            stats['thresholds_found'] = len(threshold_markets)
 
-            # Group by event date
-            range_by_event = self._group_by_event(range_markets)
-            thresh_by_event = self._group_by_event(threshold_markets)
+            # Group by SETTLEMENT TIME (not ticker pattern!)
+            range_by_settlement = self._group_by_settlement(range_markets)
+            thresh_by_settlement = self._group_by_settlement(threshold_markets)
 
-            # Find common events (same settlement time)
-            common_events = set(range_by_event.keys()) & set(thresh_by_event.keys())
-            stats['event_dates'] = sorted(list(common_events))
+            logger.info(f"📊 Range settlement times: {sorted(range_by_settlement.keys())[:5]}...")
+            logger.info(f"📊 Threshold settlement times: {sorted(thresh_by_settlement.keys())[:5]}...")
 
-            logger.info(f"📊 Found {len(common_events)} matching event dates: {', '.join(sorted(common_events))}")
+            # Find common settlement times
+            common_settlements = set(range_by_settlement.keys()) & set(thresh_by_settlement.keys())
+            stats['settlement_times'] = sorted(list(common_settlements))
+            stats['event_dates'] = stats['settlement_times']  # Legacy compatibility
 
-            for event_date in common_events:
-                event_ranges = range_by_event[event_date]
-                event_thresholds = thresh_by_event[event_date]
+            logger.info(f"📊 Found {len(common_settlements)} common settlement times")
 
-                logger.debug(f"🔍 Event {event_date}: {len(event_ranges)} ranges, {len(event_thresholds)} thresholds")
+            if not common_settlements:
+                logger.warning("⚠️ NO COMMON SETTLEMENT TIMES - ranges and thresholds don't match!")
+                logger.warning("   This usually means KXBTC (hourly) and KXBTCD (daily) have different schedules")
+                # Log sample times for debugging
+                if range_by_settlement:
+                    sample_range = list(range_by_settlement.keys())[:3]
+                    logger.info(f"   Sample range settlements: {sample_range}")
+                if thresh_by_settlement:
+                    sample_thresh = list(thresh_by_settlement.keys())[:3]
+                    logger.info(f"   Sample threshold settlements: {sample_thresh}")
+
+            for settlement_time in common_settlements:
+                event_ranges = range_by_settlement[settlement_time]
+                event_thresholds = thresh_by_settlement[settlement_time]
+
+                logger.info(f"🔍 Settlement {settlement_time}: {len(event_ranges)} ranges, {len(event_thresholds)} thresholds")
 
                 # Build threshold lookup by strike price
                 thresh_lookup = self._build_threshold_lookup(event_thresholds)
 
-                # Debug: Log range coverage vs threshold coverage
-                range_floors = sorted([r.get('floor_strike') for r in event_ranges if r.get('floor_strike')])
-                range_caps = sorted([r.get('cap_strike') for r in event_ranges if r.get('cap_strike')])
-                thresh_strikes = sorted([t.get('floor_strike') for t in event_thresholds if t.get('floor_strike')])
-
-                if range_floors and thresh_strikes:
-                    logger.info(f"📋 Event {event_date} coverage:")
-                    logger.info(f"   Range floors: {range_floors[:3]}...{range_floors[-3:] if len(range_floors) > 3 else ''}")
-                    logger.info(f"   Range caps:   {range_caps[:3]}...{range_caps[-3:] if len(range_caps) > 3 else ''}")
-                    logger.info(f"   Thresholds:   {thresh_strikes[:3]}...{thresh_strikes[-3:] if len(thresh_strikes) > 3 else ''}")
-
                 # Check each range for arbitrage
                 for range_mkt in event_ranges:
                     stats['ranges_checked'] += 1
-                    calc_result = self._calculate_arbitrage(range_mkt, thresh_lookup, event_date, min_edge_percent)
+                    calc_result = self._calculate_arbitrage(range_mkt, thresh_lookup, settlement_time, min_edge_percent)
                     calculations.append(calc_result)
 
                     if calc_result.total_cost_cents is not None:
@@ -260,20 +246,21 @@ class BTCArbitrageScanner:
                             stats['near_misses'] += 1
 
                     if calc_result.is_profitable:
-                        opp = self._build_opportunity(range_mkt, thresh_lookup, event_date, calc_result)
+                        opp = self._build_opportunity(range_mkt, thresh_lookup, settlement_time, calc_result)
                         if opp:
                             opportunities.append(opp)
                             logger.info(f"✅ OPPORTUNITY: {opp.range_description} | Cost: {opp.total_cost_cents}¢ | Edge: {opp.edge_percent:.1f}%")
 
                     elif calc_result.reason == 'missing_prices':
                         stats['missing_prices'] += 1
-                    elif calc_result.reason == 'missing_threshold':
+                    elif 'missing' in calc_result.reason and 'threshold' in calc_result.reason:
                         stats['missing_thresholds'] += 1
 
             # Sort by edge percent (best first)
             opportunities.sort(key=lambda x: x.edge_percent, reverse=True)
 
             # Log summary
+            logger.info("=" * 60)
             if opportunities:
                 logger.info(f"✅ Found {len(opportunities)} opportunities! Best: {opportunities[0].edge_percent:.1f}% edge")
             elif stats['near_misses'] > 0:
@@ -281,6 +268,8 @@ class BTCArbitrageScanner:
             else:
                 best = stats.get('best_cost')
                 logger.info(f"📊 No arb found. Best cost: {best}¢" if best else "📊 No valid calculations")
+            logger.info(f"📊 Stats: {stats['ranges_checked']} ranges checked, {stats['missing_thresholds']} missing thresholds, {stats['missing_prices']} missing prices")
+            logger.info("=" * 60)
 
         except Exception as e:
             logger.error(f"❌ Scan error: {e}")
@@ -296,6 +285,80 @@ class BTCArbitrageScanner:
             self._store_scan_result(opportunities, range_markets_simplified, threshold_markets_simplified, calculations, stats)
 
         return opportunities
+
+    async def _fetch_all_btc_markets(self) -> Tuple[List[Dict], List[Dict], Dict]:
+        """
+        Fetch all BTC range and threshold markets from ALL series.
+
+        Returns:
+            (range_markets, threshold_markets, series_stats)
+        """
+        all_markets = []
+        series_stats = {}
+
+        # Fetch from both KXBTC and KXBTCD series
+        for series in ["KXBTC", "KXBTCD"]:
+            try:
+                events = await self.kalshi.get_events(
+                    series_ticker=series,
+                    status="open",
+                    with_nested_markets=True,
+                    limit=100
+                )
+
+                series_markets = []
+                for event in events:
+                    for market in event.get("markets", []):
+                        market["_series"] = series
+                        market["_event_ticker"] = event.get("event_ticker", "")
+                        series_markets.append(market)
+
+                all_markets.extend(series_markets)
+                series_stats[series] = {
+                    'events': len(events),
+                    'markets': len(series_markets)
+                }
+                logger.info(f"📊 {series}: {len(events)} events, {len(series_markets)} markets")
+
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to fetch {series}: {e}")
+                series_stats[series] = {'events': 0, 'markets': 0, 'error': str(e)}
+
+        # Separate by market type (range = -B, threshold = -T)
+        range_markets = [m for m in all_markets if '-B' in m.get('ticker', '')]
+        threshold_markets = [m for m in all_markets if '-T' in m.get('ticker', '')]
+
+        # Log distribution by series
+        range_by_series = defaultdict(int)
+        thresh_by_series = defaultdict(int)
+        for m in range_markets:
+            range_by_series[m.get('_series', 'unknown')] += 1
+        for m in threshold_markets:
+            thresh_by_series[m.get('_series', 'unknown')] += 1
+
+        logger.info(f"📊 Ranges by series: {dict(range_by_series)}")
+        logger.info(f"📊 Thresholds by series: {dict(thresh_by_series)}")
+
+        return range_markets, threshold_markets, series_stats
+
+    def _group_by_settlement(self, markets: List[Dict]) -> Dict[str, List[Dict]]:
+        """
+        Group markets by exact settlement time using expiration_time field.
+
+        This is the KEY FIX: instead of parsing ticker patterns (which differ between series),
+        we use the actual expiration_time from the API which is the same for markets
+        that settle at the same moment.
+        """
+        groups = defaultdict(list)
+        for mkt in markets:
+            # Use expiration_time as the canonical settlement identifier
+            exp_time = mkt.get('expiration_time') or mkt.get('close_time')
+            if exp_time:
+                # Truncate to minute precision for matching (ignore seconds/ms)
+                # "2026-01-02T22:00:00Z" -> "2026-01-02T22:00"
+                key = exp_time[:16]
+                groups[key].append(mkt)
+        return dict(groups)
 
     def _store_scan_result(self, opportunities, range_markets, threshold_markets, calculations, stats):
         """Store the complete scan result for later retrieval."""
@@ -316,7 +379,9 @@ class BTCArbitrageScanner:
         simplified = []
         for mkt in markets:
             ticker = mkt.get('ticker', '')
-            event_date = self._extract_event_date(ticker) or ''
+            exp_time = mkt.get('expiration_time') or mkt.get('close_time') or ''
+            event_date = exp_time[:16] if exp_time else ''
+            series = mkt.get('_series', '')
 
             if market_type == 'range':
                 # Use floor_strike and cap_strike directly
@@ -346,7 +411,8 @@ class BTCArbitrageScanner:
                 no_ask=100 - mkt.get('yes_bid') if mkt.get('yes_bid') else None,
                 no_bid=100 - mkt.get('yes_ask') if mkt.get('yes_ask') else None,
                 description=desc,
-                event_date=event_date
+                event_date=event_date,
+                series=series
             ))
         return simplified
 
@@ -354,7 +420,7 @@ class BTCArbitrageScanner:
         self,
         range_mkt: Dict,
         thresh_lookup: Dict[float, Dict],
-        event_date: str,
+        settlement_time: str,
         min_edge_percent: float
     ) -> CalculationResult:
         """Calculate arbitrage for a single range using floor_strike/cap_strike fields."""
@@ -385,36 +451,35 @@ class BTCArbitrageScanner:
             edge_cents=None,
             is_profitable=False,
             reason='',
-            event_date=event_date
+            event_date=settlement_time
         )
 
         if floor is None or cap is None:
             result.reason = 'parse_error'
             return result
 
-        # For range $98,750 - $99,249.99:
-        # Lower threshold: need strike at floor - 0.01 (98749.99 means "BTC >= $98,750")
-        # Upper threshold: need strike at cap (99249.99 means "BTC >= $99,250")
-        lower_thresh_strike = floor - 0.01
-        upper_thresh_strike = cap
+        # For range $X to $Y (e.g., $87,500 - $87,749.99):
+        # Lower threshold: need "BTC >= $X" (floor_strike = X or X-0.01)
+        # Upper threshold: need "BTC >= $Y+0.01" rounded to next boundary
+        lower_thresh = self._find_threshold(floor, thresh_lookup)
+        if not lower_thresh:
+            lower_thresh = self._find_threshold(floor - 0.01, thresh_lookup)
 
-        # Find threshold markets using fuzzy matching
-        lower_thresh = self._find_threshold(lower_thresh_strike, thresh_lookup)
         if not lower_thresh:
-            # Also try exact floor value
-            lower_thresh = self._find_threshold(floor, thresh_lookup)
-        if not lower_thresh:
-            logger.debug(f"🔍 Range {range_desc}: No lower threshold for strike {lower_thresh_strike} or {floor}")
-            result.reason = 'missing_lower_threshold'
+            result.reason = f'missing_lower_threshold (need strike ~{floor})'
             return result
 
-        upper_thresh = self._find_threshold(upper_thresh_strike, thresh_lookup)
+        # Upper threshold: cap is like 87749.99, we need threshold at 87750
+        upper_thresh = self._find_threshold(cap + 0.01, thresh_lookup)
         if not upper_thresh:
-            # Also try cap + 0.01 (next boundary)
-            upper_thresh = self._find_threshold(cap + 0.01, thresh_lookup)
+            # Try next $250 boundary
+            next_boundary = ((int(cap) // 250) + 1) * 250
+            upper_thresh = self._find_threshold(next_boundary, thresh_lookup)
         if not upper_thresh:
-            logger.debug(f"🔍 Range {range_desc}: No upper threshold for strike {upper_thresh_strike}")
-            result.reason = 'missing_upper_threshold'
+            upper_thresh = self._find_threshold(round(cap + 1), thresh_lookup)
+
+        if not upper_thresh:
+            result.reason = f'missing_upper_threshold (need strike ~{cap + 0.01})'
             return result
 
         result.lower_thresh_ticker = lower_thresh.get('ticker')
@@ -471,15 +536,13 @@ class BTCArbitrageScanner:
         self,
         range_mkt: Dict,
         thresh_lookup: Dict[float, Dict],
-        event_date: str,
+        settlement_time: str,
         calc: CalculationResult
     ) -> Optional[ArbOpportunity]:
-        """Build an opportunity from a profitable calculation result using floor_strike/cap_strike."""
-        # Use floor_strike and cap_strike directly
+        """Build an opportunity from a profitable calculation result."""
         floor = range_mkt.get('floor_strike')
         cap = range_mkt.get('cap_strike')
 
-        # Fallback to ticker parsing
         if floor is None or cap is None:
             floor, cap = self._parse_range_ticker(range_mkt.get('ticker', ''))
 
@@ -487,16 +550,16 @@ class BTCArbitrageScanner:
             return None
 
         # Find thresholds using same logic as _calculate_arbitrage
-        lower_thresh_strike = floor - 0.01
-        upper_thresh_strike = cap
-
-        lower_thresh = self._find_threshold(lower_thresh_strike, thresh_lookup)
+        lower_thresh = self._find_threshold(floor, thresh_lookup)
         if not lower_thresh:
-            lower_thresh = self._find_threshold(floor, thresh_lookup)
+            lower_thresh = self._find_threshold(floor - 0.01, thresh_lookup)
 
-        upper_thresh = self._find_threshold(upper_thresh_strike, thresh_lookup)
+        upper_thresh = self._find_threshold(cap + 0.01, thresh_lookup)
         if not upper_thresh:
-            upper_thresh = self._find_threshold(cap + 0.01, thresh_lookup)
+            next_boundary = ((int(cap) // 250) + 1) * 250
+            upper_thresh = self._find_threshold(next_boundary, thresh_lookup)
+        if not upper_thresh:
+            upper_thresh = self._find_threshold(round(cap + 1), thresh_lookup)
 
         if not lower_thresh or not upper_thresh:
             return None
@@ -531,75 +594,61 @@ class BTCArbitrageScanner:
 
         return ArbOpportunity(
             id=str(uuid.uuid4()),
-            event_date=event_date,
-            settlement_time=range_mkt.get('close_time', ''),
+            event_date=settlement_time,
+            settlement_time=range_mkt.get('expiration_time') or range_mkt.get('close_time', ''),
             legs=legs,
             total_cost_cents=calc.total_cost_cents,
             range_description=calc.range_description
         )
 
-    async def _fetch_range_markets(self) -> List[Dict]:
-        """Fetch all open KXBTC range markets (only -B tickers)."""
-        try:
-            events = await self.kalshi.get_events(series_ticker="KXBTC", status="open", with_nested_markets=True, limit=100)
-            # Extract markets from events
-            all_markets = []
-            for event in events:
-                event_markets = event.get("markets", [])
-                all_markets.extend(event_markets)
-            # Filter to only -B (range) tickers, exclude -T (threshold) tickers
-            markets = [m for m in all_markets if '-B' in m.get('ticker', '')]
-            logger.debug(f"🔍 KXBTC: {len(events)} events, {len(all_markets)} total markets, {len(markets)} range (-B) markets")
-            return markets
-        except Exception as e:
-            logger.error(f"❌ Error fetching range markets: {e}")
-            return []
+    def _build_threshold_lookup(self, thresholds: List[Dict]) -> Dict[float, Dict]:
+        """
+        Build lookup of threshold markets by floor_strike.
 
-    async def _fetch_threshold_markets(self) -> List[Dict]:
-        """Fetch all open KXBTCD threshold markets (only -T tickers)."""
-        try:
-            events = await self.kalshi.get_events(series_ticker="KXBTCD", status="open", with_nested_markets=True, limit=100)
-            # Extract markets from events
-            all_markets = []
-            for event in events:
-                event_markets = event.get("markets", [])
-                all_markets.extend(event_markets)
-            # Filter to only -T (threshold) tickers
-            markets = [m for m in all_markets if '-T' in m.get('ticker', '')]
-            logger.debug(f"🔍 KXBTCD: {len(events)} events, {len(all_markets)} total markets, {len(markets)} threshold (-T) markets")
-            return markets
-        except Exception as e:
-            logger.error(f"❌ Error fetching threshold markets: {e}")
-            return []
+        Stores multiple keys for each threshold to enable fuzzy matching:
+        - Exact strike (97749.99)
+        - Rounded (97750)
+        - Ceiling (97750)
+        - Integer (97749)
+        """
+        import math
+        lookup = {}
 
-    def _group_by_event(self, markets: List[Dict]) -> Dict[str, List[Dict]]:
-        """Group markets by event date (e.g., '25DEC3119')."""
-        groups = {}
-        for mkt in markets:
-            ticker = mkt.get('ticker', '')
-            event_date = self._extract_event_date(ticker)
-            if event_date:
-                if event_date not in groups:
-                    groups[event_date] = []
-                groups[event_date].append(mkt)
-        return groups
+        for mkt in thresholds:
+            strike = mkt.get('floor_strike')
+            if strike is not None:
+                # Store with multiple keys for fuzzy matching
+                lookup[strike] = mkt
+                lookup[round(strike)] = mkt
+                lookup[math.ceil(strike)] = mkt
+                lookup[int(strike)] = mkt
+                # Also store +/- 0.01 variants
+                lookup[strike + 0.01] = mkt
+                lookup[strike - 0.01] = mkt
 
-    def _extract_event_date(self, ticker: str) -> Optional[str]:
-        """Extract event date from ticker. KXBTC-25DEC3119-B... -> '25DEC3119'"""
-        match = re.search(r'-(\d{2}[A-Z]{3}\d{4})-', ticker)
-        return match.group(1) if match else None
+        return lookup
+
+    def _find_threshold(self, strike: float, lookup: Dict[float, Dict]) -> Optional[Dict]:
+        """Find threshold market with fuzzy matching on strike price."""
+        # Try exact match
+        if strike in lookup:
+            return lookup[strike]
+        # Try rounded
+        if round(strike) in lookup:
+            return lookup[round(strike)]
+        # Try nearby values
+        for offset in [0.01, -0.01, 1, -1, 0.5, -0.5, 0.99, -0.99]:
+            if (strike + offset) in lookup:
+                return lookup[strike + offset]
+        return None
 
     def _parse_range_ticker(self, ticker: str) -> Tuple[Optional[float], Optional[float]]:
-        """Parse range bounds. KXBTC-26JAN0217-B87500 -> (87500.0, 87749.99)
-
-        Actual format is just -B<lower>, upper bound is lower + 249.99 (ranges are $250 wide).
-        """
+        """Parse range bounds. KXBTC-26JAN0217-B87500 -> (87500.0, 87749.99)"""
         match = re.search(r'-B(\d+(?:\.\d+)?)$', ticker)
         if match:
             lower = float(match.group(1))
             upper = lower + 249.99  # Ranges are $250 wide
             return lower, upper
-        logger.warning(f"⚠️ Range ticker parse failed: '{ticker}' (expected -B<num> pattern)")
         return None, None
 
     def _parse_threshold_ticker(self, ticker: str) -> Optional[float]:
@@ -607,188 +656,7 @@ class BTCArbitrageScanner:
         match = re.search(r'-T(\d+(?:\.\d+)?)$', ticker)
         if match:
             return float(match.group(1))
-        logger.warning(f"⚠️ Threshold ticker parse failed: '{ticker}' (expected -T<num> pattern)")
         return None
-
-    def _build_threshold_lookup(self, thresholds: List[Dict]) -> Dict[float, Dict]:
-        """Build lookup of threshold markets by floor_strike.
-
-        Uses floor_strike field directly instead of parsing tickers.
-        Stores both exact and rounded keys for fuzzy matching.
-        """
-        import math
-        lookup = {}
-        original_strikes = []
-        for mkt in thresholds:
-            # Use floor_strike field directly (e.g., 99249.99 means "BTC >= $99,250")
-            strike = mkt.get('floor_strike')
-            if strike is not None:
-                original_strikes.append(strike)
-                # Store exact strike
-                lookup[strike] = mkt
-                # Also store rounded version (97749.99 -> 97750)
-                rounded = round(strike)
-                if rounded not in lookup:
-                    lookup[rounded] = mkt
-                # Also store ceiling (97749.99 -> 97750)
-                ceiling = math.ceil(strike)
-                if ceiling not in lookup:
-                    lookup[ceiling] = mkt
-
-        # Debug: Log sample threshold floor_strikes
-        if original_strikes:
-            sample = sorted(original_strikes)[:10]
-            logger.info(f"📋 Sample threshold floor_strikes: {sample}")
-
-        return lookup
-
-    def _find_threshold(self, strike: float, lookup: Dict[float, Dict]) -> Optional[Dict]:
-        """Find threshold market with fuzzy matching on strike price.
-
-        Handles decimal precision issues:
-        - Range at 97750 needs threshold at 97749.99 (meaning "BTC >= $97,750")
-        """
-        # Try exact match
-        if strike in lookup:
-            return lookup[strike]
-        # Try rounded
-        if round(strike) in lookup:
-            return lookup[round(strike)]
-        # Try strike - 0.01 (for 97750 -> 97749.99)
-        if (strike - 0.01) in lookup:
-            return lookup[strike - 0.01]
-        # Try strike + 0.01
-        if (strike + 0.01) in lookup:
-            return lookup[strike + 0.01]
-        # Try nearby values within $1
-        for offset in [-1, 1, -0.5, 0.5, -0.99, 0.99]:
-            if (strike + offset) in lookup:
-                return lookup[strike + offset]
-        return None
-
-    def _check_range_arbitrage(
-        self,
-        range_mkt: Dict,
-        thresh_lookup: Dict[float, Dict],
-        event_date: str
-    ) -> Optional[ArbOpportunity]:
-        """
-        Check if a range has an arbitrage opportunity using floor_strike/cap_strike.
-
-        Trade structure:
-        - Buy Range YES (pays if BTC in range)
-        - Buy Lower Threshold NO (pays if BTC < lower bound)
-        - Buy Upper Threshold YES (pays if BTC >= upper bound)
-
-        ONE of these ALWAYS wins = guaranteed $1 payout.
-        """
-        # Use floor_strike and cap_strike directly
-        floor = range_mkt.get('floor_strike')
-        cap = range_mkt.get('cap_strike')
-
-        # Fallback to ticker parsing
-        if floor is None or cap is None:
-            floor, cap = self._parse_range_ticker(range_mkt.get('ticker', ''))
-
-        if floor is None or cap is None:
-            return None
-
-        # Find thresholds using same logic as _calculate_arbitrage
-        lower_thresh_strike = floor - 0.01
-        upper_thresh_strike = cap
-
-        lower_thresh = self._find_threshold(lower_thresh_strike, thresh_lookup)
-        if not lower_thresh:
-            lower_thresh = self._find_threshold(floor, thresh_lookup)
-
-        upper_thresh = self._find_threshold(upper_thresh_strike, thresh_lookup)
-        if not upper_thresh:
-            upper_thresh = self._find_threshold(cap + 0.01, thresh_lookup)
-
-        if not lower_thresh or not upper_thresh:
-            return None
-
-        # Get prices (in cents)
-        range_yes_ask = range_mkt.get('yes_ask')
-        lower_yes_bid = lower_thresh.get('yes_bid')
-        upper_yes_ask = upper_thresh.get('yes_ask')
-
-        # Need all prices to calculate
-        if not all([range_yes_ask, lower_yes_bid, upper_yes_ask]):
-            return None
-
-        # Calculate costs
-        range_cost = range_yes_ask  # Buy Range YES at ask
-        lower_no_cost = 100 - lower_yes_bid  # Buy Lower Threshold NO (100 - YES bid)
-        upper_cost = upper_yes_ask  # Buy Upper Threshold YES at ask
-
-        total_cost = range_cost + lower_no_cost + upper_cost
-
-        # Arbitrage exists if total cost < 100 cents
-        if total_cost >= 100:
-            return None
-
-        # Build the opportunity
-        legs = [
-            ArbLeg(
-                ticker=range_mkt['ticker'],
-                market_type='range',
-                side='yes',
-                action='buy',
-                price_cents=range_cost,
-                lower_bound=floor,
-                upper_bound=cap
-            ),
-            ArbLeg(
-                ticker=lower_thresh['ticker'],
-                market_type='threshold',
-                side='no',
-                action='buy',
-                price_cents=lower_no_cost,
-                strike=lower_thresh.get('floor_strike', floor)
-            ),
-            ArbLeg(
-                ticker=upper_thresh['ticker'],
-                market_type='threshold',
-                side='yes',
-                action='buy',
-                price_cents=upper_cost,
-                strike=upper_thresh.get('floor_strike', cap)
-            )
-        ]
-
-        return ArbOpportunity(
-            id=str(uuid.uuid4()),
-            event_date=event_date,
-            settlement_time=range_mkt.get('close_time', ''),
-            legs=legs,
-            total_cost_cents=total_cost,
-            range_description=f"${floor:,.0f} - ${cap:,.2f}"
-        )
-
-    def _find_next_threshold_strike(
-        self,
-        upper_bound: float,
-        thresh_lookup: Dict[float, Dict]
-    ) -> Optional[float]:
-        """
-        Find the threshold strike that matches the range's upper bound.
-        Range $87,500-$87,749.99 needs threshold at $87,750.
-        """
-        # Try exact next strike (upper + 0.01 rounded)
-        next_strike = round(upper_bound + 0.01, 0)
-        if next_strike in thresh_lookup:
-            return next_strike
-
-        # Try common increments (250, 500, 1000)
-        for increment in [250, 500, 1000]:
-            candidate = (int(upper_bound / increment) + 1) * increment
-            if candidate in thresh_lookup:
-                return candidate
-
-        # Find closest strike above upper bound
-        available = sorted([s for s in thresh_lookup.keys() if s > upper_bound])
-        return available[0] if available else None
 
     def calculate_trade(self, opportunity: ArbOpportunity, budget_cents: int) -> Dict:
         """Calculate trade details for a given budget."""
@@ -797,7 +665,6 @@ class BTCArbitrageScanner:
         if cost_per_set <= 0:
             return {'error': 'Invalid opportunity cost'}
 
-        # Calculate max contracts from budget
         contracts = budget_cents // cost_per_set
 
         if contracts <= 0:
@@ -805,7 +672,7 @@ class BTCArbitrageScanner:
 
         total_cost = contracts * cost_per_set
 
-        # Estimate fees (Kalshi formula: ceil(0.07 * contracts * price * (1-price)))
+        # Estimate fees (Kalshi formula)
         total_fees = 0
         for leg in opportunity.legs:
             price = leg.price_cents / 100

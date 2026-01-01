@@ -61,6 +61,7 @@ HTTP REST API endpoints for opportunities and trading
 | get_btc_arb_executions | limit: int = 50 | dict | Get BTC arbitrage execution history |
 | get_raw_btc_markets | - | dict | Diagnostic: Get raw market data from KXBTC and KXBTCD series |
 | get_ticker_patterns | - | dict | Diagnostic: Analyze ticker patterns in BTC markets with format breakdown |
+| get_btc_arb_debug | - | dict | Diagnostic: Detailed BTC arbitrage scanner analysis with settlement matching |
 
 ### websocket.py
 WebSocket connection manager for real-time updates
@@ -118,6 +119,8 @@ HTTP client for Kalshi REST API with retry logic and batch orders
 | KalshiClient.get_positions | status: str | List[Dict] | Get portfolio positions |
 | KalshiClient.place_order | ticker, side, action, count, price, order_type | Dict | Place single limit order on Kalshi |
 | KalshiClient.place_batch_orders | orders: List[Dict] | Dict | Execute multiple orders atomically via batch endpoint |
+| KalshiClient.get_fills | limit: int = 100 | List[Dict] | Get fill history from Kalshi API with trade details |
+| KalshiClient.get_orders | status?: str, limit: int = 100 | List[Dict] | Get order history from Kalshi API with optional status filter |
 
 ### spot_price_client.py
 BTC spot price from free APIs with fallback support

@@ -203,3 +203,33 @@ class KalshiClient:
             "/portfolio/orders/batched",
             json={"orders": orders}
         )
+
+    async def get_fills(self, limit: int = 100) -> List[Dict]:
+        """
+        Get fill history from Kalshi API.
+
+        Args:
+            limit: Maximum fills to return (default 100)
+
+        Returns:
+            List of fill objects with trade_id, ticker, side, count, price, etc.
+        """
+        result = await self._request("GET", "/portfolio/fills", params={"limit": limit})
+        return result.get("fills", [])
+
+    async def get_orders(self, status: Optional[str] = None, limit: int = 100) -> List[Dict]:
+        """
+        Get order history from Kalshi API.
+
+        Args:
+            status: Filter by status ("resting", "canceled", "executed")
+            limit: Maximum orders to return (default 100)
+
+        Returns:
+            List of order objects
+        """
+        params = {"limit": limit}
+        if status:
+            params["status"] = status
+        result = await self._request("GET", "/portfolio/orders", params=params)
+        return result.get("orders", [])
