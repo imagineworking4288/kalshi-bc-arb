@@ -395,6 +395,11 @@
 | opportunities_found | int | Opportunities in current scan |
 | auto_executions | int | Total auto-executions performed |
 | last_error | str \| null | Last error message if any |
+| all_calculations | List[CalculationResult] | All calculations sorted by cost |
+| near_misses | List[CalculationResult] | Calculations with cost 100-105¢ |
+| profitable | List[CalculationResult] | Calculations with cost < 100¢ |
+| market_data | Dict | Range/threshold market data and event dates |
+| activity_log | List[LogEntry] | Recent activity log messages |
 
 ### CalculationResult (backend/services/btc_arb_scanner.py)
 

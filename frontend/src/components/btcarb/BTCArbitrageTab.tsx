@@ -87,19 +87,22 @@ interface EngineStatus {
     threshold_markets: SimplifiedMarket[];
     event_dates: string[];
   };
-  calculations: Calculation[];
+  calculations: Calculation[];  // Top 20 for backwards compat
+  all_calculations: Calculation[];  // ALL calculations sorted by cost
+  near_misses: Calculation[];  // Cost 100-105¢
+  profitable: Calculation[];  // Cost < 100¢
   stats: Stats;
   activity_log: LogEntry[];
 }
 
-type TabType = 'calculations' | 'markets' | 'log' | 'opportunities';
+type TabType = 'near_misses' | 'calculations' | 'markets' | 'log' | 'opportunities';
 
 export function BTCArbitrageTab() {
   const [status, setStatus] = useState<EngineStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [executing, setExecuting] = useState<string | null>(null);
   const [execResult, setExecResult] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('calculations');
+  const [activeTab, setActiveTab] = useState<TabType>('near_misses');
 
   const [minEdge, setMinEdge] = useState(3.0);
   const [budgetDollars, setBudgetDollars] = useState(100);
@@ -129,7 +132,7 @@ export function BTCArbitrageTab() {
     };
 
     fetchStatus();
-    pollRef.current = setInterval(fetchStatus, 1000);
+    pollRef.current = setInterval(fetchStatus, 2000);  // Poll every 2s to catch price moves
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -233,7 +236,9 @@ export function BTCArbitrageTab() {
   }
 
   const opportunities = status?.opportunities || [];
-  const calculations = status?.calculations || [];
+  const allCalculations = status?.all_calculations || [];
+  const nearMisses = status?.near_misses || [];
+  const profitableCalcs = status?.profitable || [];
   const rangeMarkets = status?.market_data?.range_markets || [];
   const thresholdMarkets = status?.market_data?.threshold_markets || [];
   const activityLog = status?.activity_log || [];
@@ -359,10 +364,11 @@ export function BTCArbitrageTab() {
       {/* Tab Navigation */}
       <div className="flex border-b border-slate-700">
         {[
-          { key: 'calculations', label: `Calculations (${calculations.length})` },
+          { key: 'near_misses', label: `Near Misses (${nearMisses.length})`, highlight: nearMisses.length > 0 },
+          { key: 'opportunities', label: `Profitable (${profitableCalcs.length})`, highlight: profitableCalcs.length > 0 },
+          { key: 'calculations', label: `All (${allCalculations.length})` },
           { key: 'markets', label: `Markets (${rangeMarkets.length}/${thresholdMarkets.length})` },
-          { key: 'log', label: `Log (${activityLog.length})` },
-          { key: 'opportunities', label: `Opportunities (${opportunities.length})` }
+          { key: 'log', label: `Log (${activityLog.length})` }
         ].map(tab => (
           <button
             key={tab.key}
@@ -370,6 +376,8 @@ export function BTCArbitrageTab() {
             className={`px-4 py-2 text-sm font-medium ${
               activeTab === tab.key
                 ? 'text-blue-400 border-b-2 border-blue-400'
+                : tab.highlight
+                ? 'text-yellow-400 hover:text-yellow-300'
                 : 'text-gray-400 hover:text-gray-300'
             }`}
           >
@@ -380,47 +388,126 @@ export function BTCArbitrageTab() {
 
       {/* Tab Content */}
       <div className="bg-slate-800 rounded-lg p-4 max-h-96 overflow-y-auto">
+        {activeTab === 'near_misses' && (
+          <div>
+            {nearMisses.length === 0 ? (
+              <div className="text-gray-500 text-center py-4">
+                No near-misses (cost 100-105¢) found
+                <div className="text-xs mt-2">Best cost: {stats.best_cost !== null ? `${stats.best_cost}¢` : '-'}</div>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-400 border-b border-slate-600">
+                    <th className="pb-2 px-1">Range</th>
+                    <th className="pb-2 px-1 text-right">Range</th>
+                    <th className="pb-2 px-1 text-right">Lower NO</th>
+                    <th className="pb-2 px-1 text-right">Upper YES</th>
+                    <th className="pb-2 px-1 text-right font-bold">Total</th>
+                    <th className="pb-2 px-1 text-right">P/L</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {nearMisses.map((calc, idx) => (
+                    <tr
+                      key={idx}
+                      className={`border-b border-slate-700/50 ${
+                        calc.total_cost_cents !== null && calc.total_cost_cents < 100
+                          ? 'bg-green-900/30'
+                          : calc.total_cost_cents !== null && calc.total_cost_cents <= 102
+                          ? 'bg-yellow-900/30'
+                          : ''
+                      }`}
+                    >
+                      <td className="py-2 px-1">
+                        <div className="text-white font-medium">{calc.range_description}</div>
+                        <div className="text-xs text-gray-500">{calc.event_date}</div>
+                      </td>
+                      <td className="py-2 px-1 text-right font-mono text-blue-400">
+                        {calc.range_yes_ask ?? '-'}¢
+                      </td>
+                      <td className="py-2 px-1 text-right font-mono text-purple-400">
+                        {calc.lower_thresh_no_cost ?? '-'}¢
+                      </td>
+                      <td className="py-2 px-1 text-right font-mono text-cyan-400">
+                        {calc.upper_thresh_yes_ask ?? '-'}¢
+                      </td>
+                      <td className={`py-2 px-1 text-right font-mono font-bold ${getCostColor(calc.total_cost_cents)}`}>
+                        {calc.total_cost_cents !== null ? `${calc.total_cost_cents}¢` : '-'}
+                      </td>
+                      <td className={`py-2 px-1 text-right font-mono ${
+                        calc.edge_cents !== null && calc.edge_cents > 0 ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        {calc.edge_cents !== null ? `${calc.edge_cents > 0 ? '+' : ''}${calc.edge_cents}¢` : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <div className="text-xs text-gray-500 mt-3 text-center">
+              Showing {nearMisses.length} near-misses (100-105¢) | Green = profitable (&lt;100¢) | Yellow = very close (100-102¢)
+            </div>
+          </div>
+        )}
+
         {activeTab === 'calculations' && (
-          <div className="space-y-2">
-            {calculations.length === 0 ? (
+          <div>
+            {allCalculations.length === 0 ? (
               <div className="text-gray-500 text-center py-4">No calculations yet - waiting for scan</div>
             ) : (
-              calculations.map((calc, idx) => (
-                <div
-                  key={idx}
-                  className={`p-3 rounded border ${
-                    calc.is_profitable
-                      ? 'bg-green-900/30 border-green-500'
-                      : calc.total_cost_cents !== null && calc.total_cost_cents <= 105
-                      ? 'bg-yellow-900/20 border-yellow-600'
-                      : 'bg-slate-700/50 border-slate-600'
-                  }`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="font-medium text-white">{calc.range_description}</span>
-                      <span className="text-xs text-gray-400 ml-2">{calc.event_date}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className={`font-bold ${getCostColor(calc.total_cost_cents)}`}>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-400 border-b border-slate-600">
+                    <th className="pb-2 px-1">Range</th>
+                    <th className="pb-2 px-1 text-right">Range</th>
+                    <th className="pb-2 px-1 text-right">Lower NO</th>
+                    <th className="pb-2 px-1 text-right">Upper YES</th>
+                    <th className="pb-2 px-1 text-right font-bold">Total</th>
+                    <th className="pb-2 px-1 text-right">P/L</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allCalculations.map((calc, idx) => (
+                    <tr
+                      key={idx}
+                      className={`border-b border-slate-700/50 ${
+                        calc.total_cost_cents !== null && calc.total_cost_cents < 100
+                          ? 'bg-green-900/30'
+                          : calc.total_cost_cents !== null && calc.total_cost_cents <= 105
+                          ? 'bg-yellow-900/20'
+                          : ''
+                      }`}
+                    >
+                      <td className="py-2 px-1">
+                        <div className="text-white font-medium">{calc.range_description}</div>
+                        <div className="text-xs text-gray-500">{calc.event_date}</div>
+                      </td>
+                      <td className="py-2 px-1 text-right font-mono text-blue-400">
+                        {calc.range_yes_ask ?? '-'}¢
+                      </td>
+                      <td className="py-2 px-1 text-right font-mono text-purple-400">
+                        {calc.lower_thresh_no_cost ?? '-'}¢
+                      </td>
+                      <td className="py-2 px-1 text-right font-mono text-cyan-400">
+                        {calc.upper_thresh_yes_ask ?? '-'}¢
+                      </td>
+                      <td className={`py-2 px-1 text-right font-mono font-bold ${getCostColor(calc.total_cost_cents)}`}>
                         {calc.total_cost_cents !== null ? `${calc.total_cost_cents}¢` : '-'}
-                      </span>
-                      {calc.edge_cents !== null && (
-                        <span className="text-xs text-gray-400 ml-2">
-                          ({calc.edge_cents > 0 ? '+' : ''}{calc.edge_cents}¢)
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-400 mt-1 font-mono">
-                    Range: {calc.range_yes_ask ?? '-'}¢ + LowerNO: {calc.lower_thresh_no_cost ?? '-'}¢ + UpperYES: {calc.upper_thresh_yes_ask ?? '-'}¢
-                  </div>
-                  <div className={`text-xs mt-1 ${calc.is_profitable ? 'text-green-400' : 'text-gray-500'}`}>
-                    {calc.reason}
-                  </div>
-                </div>
-              ))
+                      </td>
+                      <td className={`py-2 px-1 text-right font-mono ${
+                        calc.edge_cents !== null && calc.edge_cents > 0 ? 'text-green-400' : 'text-red-400'
+                      }`}>
+                        {calc.edge_cents !== null ? `${calc.edge_cents > 0 ? '+' : ''}${calc.edge_cents}¢` : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
+            <div className="text-xs text-gray-500 mt-3 text-center">
+              Sorted by total cost (lowest first) | Green = profitable | Yellow = near-miss
+            </div>
           </div>
         )}
 

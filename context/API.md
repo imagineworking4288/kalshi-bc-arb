@@ -278,7 +278,7 @@ Continuous BTC arbitrage scanning and execution engine
 | BTCArbitrageEngine.start | - | None | Start background scanning loop |
 | BTCArbitrageEngine.stop | - | None | Stop background scanning loop |
 | BTCArbitrageEngine.get_status | - | dict | Get current engine status and config |
-| BTCArbitrageEngine.get_full_status | - | dict | Get complete status including market data, calculations, and activity log |
+| BTCArbitrageEngine.get_full_status | - | dict | Get complete status including market data, categorized calculations (near_misses, profitable), and activity log |
 | BTCArbitrageEngine.get_opportunities | - | List[dict] | Get current detected opportunities |
 | BTCArbitrageEngine.update_config | **kwargs | dict | Update engine configuration |
 | BTCArbitrageEngine.manual_execute | opportunity_id | dict | Manually execute specific opportunity |

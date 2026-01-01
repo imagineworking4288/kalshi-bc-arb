@@ -128,7 +128,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/src/components/trading/TradingTab.tsx | Trading dashboard view |
 | frontend/src/components/watchlist/WatchlistTab.tsx | Saved markets with live prices |
 | frontend/src/components/autotrader/AutoTraderTab.tsx | Auto-trading control panel and signal monitoring |
-| frontend/src/components/btcarb/BTCArbitrageTab.tsx | BTC arbitrage transparency UI with calculations and market data |
+| frontend/src/components/btcarb/BTCArbitrageTab.tsx | BTC arbitrage monitoring with near-misses table and opportunity tracking |
 | frontend/src/hooks/useSpotPrice.ts | Live BTC price polling hook |
 | frontend/src/services/api.ts | Backend HTTP API client |
 | frontend/src/stores/opportunityStore.ts | Opportunities Zustand store |

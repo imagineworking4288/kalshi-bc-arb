@@ -367,17 +367,31 @@ class BTCArbitrageEngine:
             'missing_thresholds': 0
         }
 
+        # Categorized calculations for UI
+        all_calculations = []
+        near_misses = []
+        profitable = []
+
         if scan_result:
             # Market data
             market_data['range_markets'] = [m.to_dict() for m in scan_result.range_markets[:50]]
             market_data['threshold_markets'] = [m.to_dict() for m in scan_result.threshold_markets[:50]]
             market_data['event_dates'] = scan_result.stats.get('event_dates', [])
 
-            # Calculations - sort by total_cost (best first) and take top 20
+            # ALL calculations with valid costs, sorted by cost (best first)
             sorted_calcs = sorted(
                 [c for c in scan_result.calculations if c.total_cost_cents is not None],
                 key=lambda x: x.total_cost_cents
             )
+            all_calculations = [c.to_dict() for c in sorted_calcs]
+
+            # Near-misses: cost 100-105¢ (close to profitable)
+            near_misses = [c.to_dict() for c in sorted_calcs if 100 <= c.total_cost_cents <= 105]
+
+            # Profitable: cost < 100¢
+            profitable = [c.to_dict() for c in sorted_calcs if c.total_cost_cents < 100]
+
+            # Top 20 for backwards compatibility
             calculations = [c.to_dict() for c in sorted_calcs[:20]]
 
             # Stats
@@ -391,6 +405,9 @@ class BTCArbitrageEngine:
             'opportunities': opportunities,
             'market_data': market_data,
             'calculations': calculations,
+            'all_calculations': all_calculations,
+            'near_misses': near_misses,
+            'profitable': profitable,
             'stats': stats,
             'activity_log': activity_log[:50]  # Last 50 log messages
         }

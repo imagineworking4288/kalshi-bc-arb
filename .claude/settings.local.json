@@ -25,7 +25,15 @@
       "Bash(tasklist:*)",
       "Bash(..venv\\\\Scripts\\\\python.exe -m uvicorn:*)",
       "Bash(..\\\\venv\\\\Scripts\\\\python.exe:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(for file in \"frontend/src/components/btcarb/BTCArbitrageTab.tsx\" \"backend/services/btc_arb_engine.py\" \"backend/services/btc_arb_scanner.py\" \"backend/api/routes.py\")",
+      "Bash(do)",
+      "Bash(then)",
+      "Bash(echo:*)",
+      "Bash(else)",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(for file in \"btc_arb_engine.py\" \"btc_arb_scanner.py\" \"routes.py\")"
     ]
   }
 }
