@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import time
 
 from .btc_arb_scanner import BTCArbitrageScanner, ArbOpportunity
+from ..utils.logger import btc_arb_logger as logger, btc_arb_activity
 
 
 @dataclass
@@ -64,7 +65,7 @@ class BTCArbitrageEngine:
         await self._ensure_config_exists()
         self.status.is_running = True
         self._task = asyncio.create_task(self._run_loop())
-        print(f"[BTC ARB ENGINE] Started - scanning every {self.config.scan_interval_seconds}s")
+        logger.info(f"🚀 Engine started - scanning every {self.config.scan_interval_seconds}s")
 
     async def stop(self):
         """Stop the engine."""
@@ -75,7 +76,7 @@ class BTCArbitrageEngine:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        print("[BTC ARB ENGINE] Stopped")
+        logger.info("🛑 Engine stopped")
 
     async def _ensure_config_exists(self):
         """Ensure config row exists in database."""
@@ -86,7 +87,7 @@ class BTCArbitrageEngine:
                 """)
                 await conn.commit()
         except Exception as e:
-            print(f"[BTC ARB ENGINE] Error ensuring config: {e}")
+            logger.error(f"❌ Error ensuring config: {e}")
 
     async def _load_config(self):
         """Load config from database."""
@@ -104,7 +105,7 @@ class BTCArbitrageEngine:
                     self.config.max_position_per_opp_cents = cfg.get('max_position_per_opp_cents', 50000)
                     self.config.mode = cfg.get('mode', 'paper')
         except Exception as e:
-            print(f"[BTC ARB ENGINE] Config load error: {e}")
+            logger.error(f"❌ Config load error: {e}")
 
     async def _save_config(self):
         """Save config to database."""
@@ -131,7 +132,7 @@ class BTCArbitrageEngine:
                 ))
                 await conn.commit()
         except Exception as e:
-            print(f"[BTC ARB ENGINE] Config save error: {e}")
+            logger.error(f"❌ Config save error: {e}")
 
     async def _run_loop(self):
         """Main scanning loop."""
@@ -142,7 +143,7 @@ class BTCArbitrageEngine:
                 break
             except Exception as e:
                 self.status.last_error = str(e)
-                print(f"[BTC ARB ENGINE] Error: {e}")
+                logger.error(f"❌ Scan cycle error: {e}")
 
             await asyncio.sleep(self.config.scan_interval_seconds)
 
@@ -154,7 +155,7 @@ class BTCArbitrageEngine:
         opportunities = await self.scanner.scan(self.config.min_edge_percent)
 
         # Update status
-        self.status.last_scan_at = datetime.utcnow().isoformat()
+        self.status.last_scan_at = datetime.utcnow().isoformat() + 'Z'
         self.status.last_scan_duration_ms = int((time.time() - start) * 1000)
         self.status.total_scans += 1
         self.status.opportunities_found = len(opportunities)
@@ -171,7 +172,7 @@ class BTCArbitrageEngine:
 
     async def _auto_execute(self, opportunity: ArbOpportunity):
         """Auto-execute an opportunity."""
-        print(f"[BTC ARB ENGINE] Auto-executing: {opportunity.range_description} ({opportunity.edge_percent:.1f}% edge)")
+        logger.info(f"💰 Auto-executing: {opportunity.range_description} ({opportunity.edge_percent:.1f}% edge)")
 
         try:
             trade_calc = self.scanner.calculate_trade(
@@ -180,21 +181,21 @@ class BTCArbitrageEngine:
             )
 
             if 'error' in trade_calc:
-                print(f"[BTC ARB ENGINE] Calc error: {trade_calc['error']}")
+                logger.warning(f"⚠️ Calc error: {trade_calc['error']}")
                 return
 
             result = await self._execute_trade(opportunity, trade_calc)
 
             if result.get('success'):
                 self.status.auto_executions += 1
-                print(f"[BTC ARB ENGINE] Executed! Profit: ${trade_calc['guaranteed_profit_cents']/100:.2f}")
+                logger.info(f"✅ Executed! Profit: ${trade_calc['guaranteed_profit_cents']/100:.2f}")
 
                 # Disable auto-trade after execution (prevent rapid-fire)
                 self.config.auto_trade_enabled = False
                 await self._save_config()
 
         except Exception as e:
-            print(f"[BTC ARB ENGINE] Execution error: {e}")
+            logger.error(f"❌ Execution error: {e}")
 
     async def _execute_trade(self, opportunity: ArbOpportunity, trade_calc: Dict) -> Dict:
         """Execute a trade (paper or live)."""
@@ -259,7 +260,7 @@ class BTCArbitrageEngine:
                 'profit_cents': calc['guaranteed_profit_cents']
             }
         except Exception as e:
-            print(f"[BTC ARB ENGINE] Paper execution error: {e}")
+            logger.error(f"❌ Paper execution error: {e}")
             return {'success': False, 'error': str(e)}
 
     async def _execute_live(self, opp: ArbOpportunity, contracts: int, calc: Dict, exec_id: str) -> Dict:
@@ -334,6 +335,64 @@ class BTCArbitrageEngine:
                 'mode': self.config.mode,
                 'scan_interval_seconds': self.config.scan_interval_seconds
             }
+        }
+
+    async def get_full_status(self) -> Dict:
+        """Get complete engine status including market data and calculations."""
+        # Get basic status
+        base_status = await self.get_status()
+        opportunities = await self.get_opportunities()
+
+        # Get scan result data
+        scan_result = self.scanner.get_last_scan_result()
+
+        # Build market data summary
+        market_data = {
+            'range_markets': [],
+            'threshold_markets': [],
+            'event_dates': []
+        }
+
+        # Build calculations list (top 20 sorted by cost)
+        calculations = []
+
+        # Build stats
+        stats = {
+            'ranges_checked': 0,
+            'thresholds_found': 0,
+            'best_cost': None,
+            'worst_cost': None,
+            'near_misses': 0,
+            'missing_prices': 0,
+            'missing_thresholds': 0
+        }
+
+        if scan_result:
+            # Market data
+            market_data['range_markets'] = [m.to_dict() for m in scan_result.range_markets[:50]]
+            market_data['threshold_markets'] = [m.to_dict() for m in scan_result.threshold_markets[:50]]
+            market_data['event_dates'] = scan_result.stats.get('event_dates', [])
+
+            # Calculations - sort by total_cost (best first) and take top 20
+            sorted_calcs = sorted(
+                [c for c in scan_result.calculations if c.total_cost_cents is not None],
+                key=lambda x: x.total_cost_cents
+            )
+            calculations = [c.to_dict() for c in sorted_calcs[:20]]
+
+            # Stats
+            stats = scan_result.stats
+
+        # Get activity log
+        activity_log = btc_arb_activity.get_all()
+
+        return {
+            **base_status,
+            'opportunities': opportunities,
+            'market_data': market_data,
+            'calculations': calculations,
+            'stats': stats,
+            'activity_log': activity_log[:50]  # Last 50 log messages
         }
 
     async def update_config(self, **kwargs) -> Dict:

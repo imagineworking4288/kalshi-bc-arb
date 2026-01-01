@@ -603,11 +603,9 @@ def get_btc_arb_engine():
 
 @router.get("/btc-arb/status")
 async def get_btc_arb_status():
-    """Get BTC arbitrage engine status and current opportunities."""
+    """Get BTC arbitrage engine full status including market data and calculations."""
     engine = get_btc_arb_engine()
-    status = await engine.get_status()
-    opportunities = await engine.get_opportunities()
-    return {**status, 'opportunities': opportunities}
+    return await engine.get_full_status()
 
 
 @router.put("/btc-arb/config")

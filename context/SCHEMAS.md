@@ -396,6 +396,49 @@
 | auto_executions | int | Total auto-executions performed |
 | last_error | str \| null | Last error message if any |
 
+### CalculationResult (backend/services/btc_arb_scanner.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| range_ticker | str | Range market ticker |
+| range_description | str | Human-readable range description |
+| lower_bound | float | Range lower boundary |
+| upper_bound | float | Range upper boundary |
+| range_yes_ask | int \| null | Range YES ask price in cents |
+| lower_thresh_ticker | str \| null | Lower threshold market ticker |
+| lower_thresh_no_cost | int \| null | Lower threshold NO cost in cents |
+| upper_thresh_ticker | str \| null | Upper threshold market ticker |
+| upper_thresh_yes_ask | int \| null | Upper threshold YES ask price |
+| total_cost_cents | int \| null | Total arbitrage cost in cents |
+| edge_cents | int \| null | Arbitrage edge in cents |
+| is_profitable | bool | Whether opportunity is profitable |
+| reason | str | Reason for profitability/failure |
+| event_date | str | Event date identifier |
+
+### SimplifiedMarket (backend/services/btc_arb_scanner.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ticker | str | Market ticker |
+| market_type | str | Market type: 'range' or 'threshold' |
+| yes_ask | int \| null | YES ask price in cents |
+| yes_bid | int \| null | YES bid price in cents |
+| no_ask | int \| null | NO ask price in cents |
+| no_bid | int \| null | NO bid price in cents |
+| description | str | Human-readable market description |
+| event_date | str | Event date identifier |
+
+### ScanResult (backend/services/btc_arb_scanner.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| opportunities | List[ArbOpportunity] | Found arbitrage opportunities |
+| range_markets | List[SimplifiedMarket] | Simplified range market data |
+| threshold_markets | List[SimplifiedMarket] | Simplified threshold market data |
+| calculations | List[CalculationResult] | All arbitrage calculations performed |
+| stats | Dict | Scan statistics and metrics |
+| timestamp | str | ISO timestamp of scan completion |
+
 ---
 
 ## Frontend Hook Types (frontend/src/hooks/useSpotPrice.ts)

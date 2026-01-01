@@ -17,6 +17,10 @@ dist/
 *.db
 *.sqlite
 
+# Logs
+logs/
+*.log
+
 # IDE
 .idea/
 .vscode/

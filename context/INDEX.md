@@ -98,6 +98,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/services/btc_arb_engine.py | Continuous BTC arbitrage scanning engine |
 | backend/utils/__init__.py | Utils module exports |
 | backend/utils/kalshi_auth.py | RSA-PSS signature authentication |
+| backend/utils/logger.py | Logging system with activity buffer |
 | keys/kalshi-private-key.pem | RSA private key for Kalshi |
 | frontend/index.html | Main HTML template |
 | frontend/package.json | NPM dependencies and scripts |
@@ -127,7 +128,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/src/components/trading/TradingTab.tsx | Trading dashboard view |
 | frontend/src/components/watchlist/WatchlistTab.tsx | Saved markets with live prices |
 | frontend/src/components/autotrader/AutoTraderTab.tsx | Auto-trading control panel and signal monitoring |
-| frontend/src/components/btcarb/BTCArbitrageTab.tsx | BTC arbitrage scanner monitoring interface |
+| frontend/src/components/btcarb/BTCArbitrageTab.tsx | BTC arbitrage transparency UI with calculations and market data |
 | frontend/src/hooks/useSpotPrice.ts | Live BTC price polling hook |
 | frontend/src/services/api.ts | Backend HTTP API client |
 | frontend/src/stores/opportunityStore.ts | Opportunities Zustand store |

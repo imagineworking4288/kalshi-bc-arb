@@ -256,6 +256,10 @@ BTC arbitrage opportunity detection between range and threshold markets
 | BTCArbitrageScanner._fetch_range_markets | - | List[Dict] | Fetch KXBTC range markets via get_events |
 | BTCArbitrageScanner._fetch_threshold_markets | - | List[Dict] | Fetch KXBTCD threshold markets via get_events |
 | BTCArbitrageScanner._check_range_arbitrage | range_mkt, thresh_lookup, event_date | ArbOpportunity? | Check single range for arbitrage vs thresholds |
+| BTCArbitrageScanner._simplify_markets | markets: List[Dict], market_type: str | List[SimplifiedMarket] | Extract key fields from markets for UI display |
+| BTCArbitrageScanner._calculate_arbitrage | range_mkt, thresh_lookup, event_date, min_edge | CalculationResult | Calculate arbitrage for single range with detailed breakdown |
+| BTCArbitrageScanner._build_opportunity | range_mkt, thresh_lookup, event_date, calc | ArbOpportunity? | Build opportunity from profitable calculation result |
+| BTCArbitrageScanner.get_last_scan_result | - | ScanResult? | Get most recent complete scan result with all data |
 | BTCArbitrageScanner.calculate_trade | opportunity, budget_cents | dict | Calculate trade details for given budget |
 | BTCArbitrageScanner.get_stats | - | dict | Get scanner performance statistics |
 
@@ -270,6 +274,7 @@ Continuous BTC arbitrage scanning and execution engine
 | BTCArbitrageEngine.start | - | None | Start background scanning loop |
 | BTCArbitrageEngine.stop | - | None | Stop background scanning loop |
 | BTCArbitrageEngine.get_status | - | dict | Get current engine status and config |
+| BTCArbitrageEngine.get_full_status | - | dict | Get complete status including market data, calculations, and activity log |
 | BTCArbitrageEngine.get_opportunities | - | List[dict] | Get current detected opportunities |
 | BTCArbitrageEngine.update_config | **kwargs | dict | Update engine configuration |
 | BTCArbitrageEngine.manual_execute | opportunity_id | dict | Manually execute specific opportunity |
@@ -288,6 +293,20 @@ RSA-PSS authentication for Kalshi API
 | KalshiAuth | api_key_id: str, private_key_path: str | - | Load RSA private key for signing |
 | KalshiAuth._load_key | path: str | RSAPrivateKey | Read and parse PEM private key |
 | KalshiAuth.get_headers | method: str, path: str | dict | Generate signed auth headers with timestamp |
+
+### logger.py
+Logging utilities with console output and in-memory activity buffer for UI display
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| ActivityBuffer | maxlen: int = 50 | - | Thread-safe circular buffer storing recent log messages |
+| ActivityBuffer.add | level: str, message: str, emoji: str = "" | None | Add timestamped message to buffer |
+| ActivityBuffer.get_all | - | List[Dict] | Get all messages in buffer (newest first) |
+| ActivityBuffer.clear | - | None | Clear the buffer |
+| ActivityHandler | buffer: ActivityBuffer | LogHandler | Custom logging handler writing to ActivityBuffer |
+| setup_logger | name: str, activity_buffer: ActivityBuffer = None | Logger | Setup logger with console, file, and optional activity handlers |
+| btc_arb_logger | - | Logger | Module-level logger for BTC arbitrage scanning |
+| btc_arb_activity | - | ActivityBuffer | Module-level activity buffer for UI display |
 
 ---
 

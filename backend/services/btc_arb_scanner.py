@@ -11,6 +11,8 @@ from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 import time
 
+from ..utils.logger import btc_arb_logger as logger, btc_arb_activity
+
 
 @dataclass
 class ArbLeg:
@@ -39,7 +41,7 @@ class ArbOpportunity:
     guaranteed_payout_cents: int = 100
     edge_cents: int = 0
     edge_percent: float = 0.0
-    detected_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    detected_at: str = field(default_factory=lambda: datetime.utcnow().isoformat() + 'Z')
     range_description: str = ""
 
     def __post_init__(self):
@@ -62,6 +64,80 @@ class ArbOpportunity:
         }
 
 
+@dataclass
+class CalculationResult:
+    """Result of checking a single range for arbitrage."""
+    range_ticker: str
+    range_description: str
+    lower_bound: float
+    upper_bound: float
+    range_yes_ask: Optional[int]
+    lower_thresh_ticker: Optional[str]
+    lower_thresh_no_cost: Optional[int]
+    upper_thresh_ticker: Optional[str]
+    upper_thresh_yes_ask: Optional[int]
+    total_cost_cents: Optional[int]
+    edge_cents: Optional[int]
+    is_profitable: bool
+    reason: str
+    event_date: str
+
+    def to_dict(self):
+        return {
+            'range_ticker': self.range_ticker,
+            'range_description': self.range_description,
+            'lower_bound': self.lower_bound,
+            'upper_bound': self.upper_bound,
+            'range_yes_ask': self.range_yes_ask,
+            'lower_thresh_ticker': self.lower_thresh_ticker,
+            'lower_thresh_no_cost': self.lower_thresh_no_cost,
+            'upper_thresh_ticker': self.upper_thresh_ticker,
+            'upper_thresh_yes_ask': self.upper_thresh_yes_ask,
+            'total_cost_cents': self.total_cost_cents,
+            'edge_cents': self.edge_cents,
+            'is_profitable': self.is_profitable,
+            'reason': self.reason,
+            'event_date': self.event_date
+        }
+
+
+@dataclass
+class SimplifiedMarket:
+    """Simplified market data for UI display."""
+    ticker: str
+    market_type: str  # 'range' or 'threshold'
+    yes_ask: Optional[int]
+    yes_bid: Optional[int]
+    no_ask: Optional[int]
+    no_bid: Optional[int]
+    description: str
+    event_date: str
+
+    def to_dict(self):
+        return asdict(self)
+
+
+@dataclass
+class ScanResult:
+    """Complete result of a scan cycle."""
+    opportunities: List[ArbOpportunity]
+    range_markets: List[SimplifiedMarket]
+    threshold_markets: List[SimplifiedMarket]
+    calculations: List[CalculationResult]
+    stats: Dict
+    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat() + 'Z')
+
+    def to_dict(self):
+        return {
+            'opportunities': [o.to_dict() for o in self.opportunities],
+            'range_markets': [m.to_dict() for m in self.range_markets],
+            'threshold_markets': [m.to_dict() for m in self.threshold_markets],
+            'calculations': [c.to_dict() for c in self.calculations],
+            'stats': self.stats,
+            'timestamp': self.timestamp
+        }
+
+
 class BTCArbitrageScanner:
     """Scans for arbitrage opportunities between BTC range and threshold markets."""
 
@@ -70,21 +146,46 @@ class BTCArbitrageScanner:
         self._last_scan_time = 0
         self._last_scan_duration_ms = 0
         self._scan_count = 0
+        self._last_scan_result: Optional[ScanResult] = None
 
     async def scan(self, min_edge_percent: float = 3.0) -> List[ArbOpportunity]:
         """Scan for all arbitrage opportunities. Returns list sorted by edge_percent descending."""
         start_time = time.time()
         opportunities = []
+        calculations = []
+        range_markets_simplified = []
+        threshold_markets_simplified = []
+        stats = {
+            'ranges_checked': 0,
+            'thresholds_found': 0,
+            'best_cost': None,
+            'worst_cost': None,
+            'near_misses': 0,
+            'missing_prices': 0,
+            'missing_thresholds': 0,
+            'event_dates': []
+        }
 
         try:
+            logger.info("📊 Starting market scan...")
+
             # Fetch markets in parallel for speed
             range_markets, threshold_markets = await asyncio.gather(
                 self._fetch_range_markets(),
                 self._fetch_threshold_markets()
             )
 
+            logger.info(f"📊 Fetched {len(range_markets)} range markets, {len(threshold_markets)} threshold markets")
+
             if not range_markets or not threshold_markets:
+                logger.warning("⚠️ No markets found - check API connection")
+                self._store_scan_result(opportunities, range_markets_simplified, threshold_markets_simplified, calculations, stats)
                 return []
+
+            # Simplify markets for UI
+            range_markets_simplified = self._simplify_markets(range_markets, 'range')
+            threshold_markets_simplified = self._simplify_markets(threshold_markets, 'threshold')
+            stats['thresholds_found'] = len(threshold_markets)
 
             # Group by event date
             range_by_event = self._group_by_event(range_markets)
@@ -92,32 +193,261 @@ class BTCArbitrageScanner:
 
             # Find common events (same settlement time)
             common_events = set(range_by_event.keys()) & set(thresh_by_event.keys())
+            stats['event_dates'] = sorted(list(common_events))
+
+            logger.info(f"📊 Found {len(common_events)} matching event dates: {', '.join(sorted(common_events))}")
 
             for event_date in common_events:
                 event_ranges = range_by_event[event_date]
                 event_thresholds = thresh_by_event[event_date]
+
+                logger.debug(f"🔍 Event {event_date}: {len(event_ranges)} ranges, {len(event_thresholds)} thresholds")
 
                 # Build threshold lookup by strike price
                 thresh_lookup = self._build_threshold_lookup(event_thresholds)
 
                 # Check each range for arbitrage
                 for range_mkt in event_ranges:
-                    opp = self._check_range_arbitrage(range_mkt, thresh_lookup, event_date)
-                    if opp and opp.edge_percent >= min_edge_percent:
-                        opportunities.append(opp)
+                    stats['ranges_checked'] += 1
+                    calc_result = self._calculate_arbitrage(range_mkt, thresh_lookup, event_date, min_edge_percent)
+                    calculations.append(calc_result)
+
+                    if calc_result.total_cost_cents is not None:
+                        # Track best/worst costs
+                        if stats['best_cost'] is None or calc_result.total_cost_cents < stats['best_cost']:
+                            stats['best_cost'] = calc_result.total_cost_cents
+                        if stats['worst_cost'] is None or calc_result.total_cost_cents > stats['worst_cost']:
+                            stats['worst_cost'] = calc_result.total_cost_cents
+
+                        # Track near misses (cost 100-105)
+                        if 100 <= calc_result.total_cost_cents <= 105:
+                            stats['near_misses'] += 1
+
+                    if calc_result.is_profitable:
+                        opp = self._build_opportunity(range_mkt, thresh_lookup, event_date, calc_result)
+                        if opp:
+                            opportunities.append(opp)
+                            logger.info(f"✅ OPPORTUNITY: {opp.range_description} | Cost: {opp.total_cost_cents}¢ | Edge: {opp.edge_percent:.1f}%")
+
+                    elif calc_result.reason == 'missing_prices':
+                        stats['missing_prices'] += 1
+                    elif calc_result.reason == 'missing_threshold':
+                        stats['missing_thresholds'] += 1
 
             # Sort by edge percent (best first)
             opportunities.sort(key=lambda x: x.edge_percent, reverse=True)
 
+            # Log summary
+            if opportunities:
+                logger.info(f"✅ Found {len(opportunities)} opportunities! Best: {opportunities[0].edge_percent:.1f}% edge")
+            elif stats['near_misses'] > 0:
+                logger.info(f"🔥 No arb found, but {stats['near_misses']} near-misses (cost 100-105¢)")
+            else:
+                best = stats.get('best_cost')
+                logger.info(f"📊 No arb found. Best cost: {best}¢" if best else "📊 No valid calculations")
+
         except Exception as e:
-            print(f"[BTC ARB SCANNER] Scan error: {e}")
+            logger.error(f"❌ Scan error: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
 
         finally:
             self._last_scan_time = time.time()
             self._last_scan_duration_ms = int((time.time() - start_time) * 1000)
             self._scan_count += 1
 
+            # Store complete scan result
+            self._store_scan_result(opportunities, range_markets_simplified, threshold_markets_simplified, calculations, stats)
+
         return opportunities
+
+    def _store_scan_result(self, opportunities, range_markets, threshold_markets, calculations, stats):
+        """Store the complete scan result for later retrieval."""
+        self._last_scan_result = ScanResult(
+            opportunities=opportunities,
+            range_markets=range_markets,
+            threshold_markets=threshold_markets,
+            calculations=calculations,
+            stats=stats
+        )
+
+    def get_last_scan_result(self) -> Optional[ScanResult]:
+        """Get the most recent scan result."""
+        return self._last_scan_result
+
+    def _simplify_markets(self, markets: List[Dict], market_type: str) -> List[SimplifiedMarket]:
+        """Extract key fields from markets for UI display."""
+        simplified = []
+        for mkt in markets:
+            ticker = mkt.get('ticker', '')
+            event_date = self._extract_event_date(ticker) or ''
+
+            if market_type == 'range':
+                lower, upper = self._parse_range_ticker(ticker)
+                desc = f"${lower:,.0f} - ${upper:,.2f}" if lower and upper else ticker
+            else:
+                strike = self._parse_threshold_ticker(ticker)
+                desc = f"≥ ${strike:,.0f}" if strike else ticker
+
+            simplified.append(SimplifiedMarket(
+                ticker=ticker,
+                market_type=market_type,
+                yes_ask=mkt.get('yes_ask'),
+                yes_bid=mkt.get('yes_bid'),
+                no_ask=100 - mkt.get('yes_bid') if mkt.get('yes_bid') else None,
+                no_bid=100 - mkt.get('yes_ask') if mkt.get('yes_ask') else None,
+                description=desc,
+                event_date=event_date
+            ))
+        return simplified
+
+    def _calculate_arbitrage(
+        self,
+        range_mkt: Dict,
+        thresh_lookup: Dict[float, Dict],
+        event_date: str,
+        min_edge_percent: float
+    ) -> CalculationResult:
+        """Calculate arbitrage for a single range. Returns detailed result."""
+        ticker = range_mkt.get('ticker', '')
+        lower, upper = self._parse_range_ticker(ticker)
+
+        # Base result
+        result = CalculationResult(
+            range_ticker=ticker,
+            range_description=f"${lower:,.0f} - ${upper:,.2f}" if lower and upper else ticker,
+            lower_bound=lower or 0,
+            upper_bound=upper or 0,
+            range_yes_ask=None,
+            lower_thresh_ticker=None,
+            lower_thresh_no_cost=None,
+            upper_thresh_ticker=None,
+            upper_thresh_yes_ask=None,
+            total_cost_cents=None,
+            edge_cents=None,
+            is_profitable=False,
+            reason='',
+            event_date=event_date
+        )
+
+        if lower is None or upper is None:
+            result.reason = 'parse_error'
+            return result
+
+        # Find the upper threshold (next boundary above the range)
+        upper_thresh_strike = self._find_next_threshold_strike(upper, thresh_lookup)
+        if upper_thresh_strike is None:
+            result.reason = 'missing_threshold'
+            return result
+
+        # Get the threshold markets
+        lower_thresh = thresh_lookup.get(lower)
+        upper_thresh = thresh_lookup.get(upper_thresh_strike)
+
+        if not lower_thresh or not upper_thresh:
+            result.reason = 'missing_threshold'
+            return result
+
+        result.lower_thresh_ticker = lower_thresh.get('ticker')
+        result.upper_thresh_ticker = upper_thresh.get('ticker')
+
+        # Get prices (in cents)
+        range_yes_ask = range_mkt.get('yes_ask')
+        lower_yes_bid = lower_thresh.get('yes_bid')
+        upper_yes_ask = upper_thresh.get('yes_ask')
+
+        result.range_yes_ask = range_yes_ask
+        result.upper_thresh_yes_ask = upper_yes_ask
+
+        # Calculate lower NO cost (buying NO = selling YES)
+        if lower_yes_bid is not None:
+            result.lower_thresh_no_cost = 100 - lower_yes_bid
+
+        # Need all prices to calculate
+        if not all([range_yes_ask, lower_yes_bid, upper_yes_ask]):
+            result.reason = 'missing_prices'
+            return result
+
+        # Calculate costs
+        range_cost = range_yes_ask  # Buy Range YES at ask
+        lower_no_cost = 100 - lower_yes_bid  # Buy Lower Threshold NO (100 - YES bid)
+        upper_cost = upper_yes_ask  # Buy Upper Threshold YES at ask
+
+        total_cost = range_cost + lower_no_cost + upper_cost
+        edge_cents = 100 - total_cost
+
+        result.total_cost_cents = total_cost
+        result.edge_cents = edge_cents
+
+        # Check profitability
+        if total_cost >= 100:
+            edge_percent = (edge_cents / total_cost) * 100 if total_cost > 0 else 0
+            if total_cost <= 105:
+                result.reason = f'near_miss (cost {total_cost}¢, need <100¢)'
+            else:
+                result.reason = f'too_expensive (cost {total_cost}¢ > 100¢)'
+            return result
+
+        # We have arbitrage!
+        edge_percent = (edge_cents / total_cost) * 100
+        if edge_percent < min_edge_percent:
+            result.reason = f'below_threshold ({edge_percent:.1f}% < {min_edge_percent}%)'
+            return result
+
+        result.is_profitable = True
+        result.reason = f'profitable ({edge_percent:.1f}% edge)'
+        return result
+
+    def _build_opportunity(
+        self,
+        range_mkt: Dict,
+        thresh_lookup: Dict[float, Dict],
+        event_date: str,
+        calc: CalculationResult
+    ) -> Optional[ArbOpportunity]:
+        """Build an opportunity from a profitable calculation result."""
+        lower, upper = self._parse_range_ticker(range_mkt.get('ticker', ''))
+        upper_thresh_strike = self._find_next_threshold_strike(upper, thresh_lookup)
+
+        lower_thresh = thresh_lookup.get(lower)
+        upper_thresh = thresh_lookup.get(upper_thresh_strike)
+
+        legs = [
+            ArbLeg(
+                ticker=range_mkt['ticker'],
+                market_type='range',
+                side='yes',
+                action='buy',
+                price_cents=calc.range_yes_ask,
+                lower_bound=lower,
+                upper_bound=upper
+            ),
+            ArbLeg(
+                ticker=lower_thresh['ticker'],
+                market_type='threshold',
+                side='no',
+                action='buy',
+                price_cents=calc.lower_thresh_no_cost,
+                strike=lower
+            ),
+            ArbLeg(
+                ticker=upper_thresh['ticker'],
+                market_type='threshold',
+                side='yes',
+                action='buy',
+                price_cents=calc.upper_thresh_yes_ask,
+                strike=upper_thresh_strike
+            )
+        ]
+
+        return ArbOpportunity(
+            id=str(uuid.uuid4()),
+            event_date=event_date,
+            settlement_time=range_mkt.get('close_time', ''),
+            legs=legs,
+            total_cost_cents=calc.total_cost_cents,
+            range_description=calc.range_description
+        )
 
     async def _fetch_range_markets(self) -> List[Dict]:
         """Fetch all open KXBTC range markets."""
@@ -128,9 +458,10 @@ class BTCArbitrageScanner:
             for event in events:
                 event_markets = event.get("markets", [])
                 markets.extend(event_markets)
+            logger.debug(f"🔍 KXBTC: {len(events)} events, {len(markets)} markets")
             return markets
         except Exception as e:
-            print(f"[BTC ARB SCANNER] Error fetching range markets: {e}")
+            logger.error(f"❌ Error fetching range markets: {e}")
             return []
 
     async def _fetch_threshold_markets(self) -> List[Dict]:
@@ -142,9 +473,10 @@ class BTCArbitrageScanner:
             for event in events:
                 event_markets = event.get("markets", [])
                 markets.extend(event_markets)
+            logger.debug(f"🔍 KXBTCD: {len(events)} events, {len(markets)} markets")
             return markets
         except Exception as e:
-            print(f"[BTC ARB SCANNER] Error fetching threshold markets: {e}")
+            logger.error(f"❌ Error fetching threshold markets: {e}")
             return []
 
     def _group_by_event(self, markets: List[Dict]) -> Dict[str, List[Dict]]:
