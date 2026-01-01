@@ -157,6 +157,38 @@
 | trades_count | INTEGER | Number of trades executed |
 | updated_at | TIMESTAMP | Last update timestamp |
 
+### btc_arb_executions
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | TEXT PRIMARY KEY | UUID execution identifier |
+| opportunity_id | TEXT | Associated opportunity UUID |
+| executed_at | TIMESTAMP | Execution timestamp |
+| mode | TEXT | Execution mode: 'paper' or 'live' |
+| contracts_per_leg | INTEGER | Number of contracts per arbitrage leg |
+| total_cost_cents | INTEGER | Total cost in cents |
+| total_fees_cents | INTEGER | Total Kalshi fees in cents |
+| guaranteed_profit_cents | INTEGER | Guaranteed profit amount in cents |
+| status | TEXT | Execution status: 'open', 'settled', 'partial' |
+| kalshi_response | TEXT | JSON response from Kalshi batch order |
+| settled_at | TIMESTAMP | When arbitrage settled |
+| settlement_outcome | TEXT | Settlement result description |
+| actual_payout_cents | INTEGER | Actual payout received |
+| actual_profit_cents | INTEGER | Actual profit after settlement |
+
+### btc_arb_config
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | INTEGER PRIMARY KEY | Always 1, single row configuration table |
+| min_edge_percent | REAL | Minimum edge percentage required to execute |
+| default_budget_cents | INTEGER | Default budget per opportunity in cents |
+| auto_trade_enabled | INTEGER | Auto-execution mode: 0=disabled, 1=enabled |
+| scan_interval_seconds | REAL | Scanning frequency (default 2.0 seconds) |
+| max_position_per_opp_cents | INTEGER | Maximum position size per opportunity |
+| mode | TEXT | Trading mode: 'paper' or 'live' |
+| updated_at | TIMESTAMP | Last configuration update |
+
 ---
 
 ## Backend Request Models
@@ -312,6 +344,57 @@
 | expected_profit | float | Expected profit |
 | message | str | Status message |
 | paper_mode | bool | Always False |
+
+### ArbLeg (backend/services/btc_arb_scanner.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ticker | str | Kalshi market ticker |
+| market_type | str | Market type: 'range' or 'threshold' |
+| side | str | Position side: 'yes' or 'no' |
+| action | str | Order action: 'buy' |
+| price_cents | int | Order price in cents |
+| strike | Optional[float] | Strike price for threshold markets |
+| lower_bound | Optional[float] | Lower bound for range markets |
+| upper_bound | Optional[float] | Upper bound for range markets |
+
+### ArbOpportunity (backend/services/btc_arb_scanner.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | str | UUID opportunity identifier |
+| event_date | str | Settlement event date (e.g., '25DEC3119') |
+| settlement_time | str | ISO settlement timestamp |
+| legs | List[ArbLeg] | All three arbitrage legs |
+| total_cost_cents | int | Total cost for one contract set |
+| guaranteed_payout_cents | int | Always 100 (cents) |
+| edge_cents | int | Guaranteed profit in cents |
+| edge_percent | float | Profit percentage |
+| detected_at | str | ISO detection timestamp |
+| range_description | str | Human-readable range (e.g., "$87,500 - $87,749.99") |
+
+### EngineConfig (backend/services/btc_arb_engine.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| min_edge_percent | float | Minimum edge required (default 3.0) |
+| budget_cents | int | Budget per opportunity (default 10000) |
+| auto_trade_enabled | bool | Auto-execution enabled flag |
+| mode | str | Trading mode: 'paper' or 'live' |
+| scan_interval_seconds | float | Scan frequency (default 2.0) |
+| max_position_per_opp_cents | int | Max position size (default 50000) |
+
+### EngineStatus (backend/services/btc_arb_engine.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| is_running | bool | Engine running state |
+| last_scan_at | str \| null | ISO timestamp of last scan |
+| last_scan_duration_ms | int | Last scan duration in milliseconds |
+| total_scans | int | Total number of scans performed |
+| opportunities_found | int | Opportunities in current scan |
+| auto_executions | int | Total auto-executions performed |
+| last_error | str \| null | Last error message if any |
 
 ---
 

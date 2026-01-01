@@ -7,7 +7,7 @@ FastAPI application entry point with lifespan management
 
 | Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
-| lifespan | app: FastAPI | AsyncGenerator | Init database, print startup banner, handle shutdown |
+| lifespan | app: FastAPI | AsyncGenerator | Init database, auto-trader, BTC arbitrage engine, print startup banner, handle shutdown |
 | health | - | dict | Health check endpoint, returns status and paper mode |
 
 ### config.py
@@ -53,6 +53,12 @@ HTTP REST API endpoints for opportunities and trading
 | stop_auto_trader | - | dict | Stop the auto-trader background process |
 | manual_scan | - | dict | Manually trigger edge scan without executing trades |
 | get_signals | status?: str, limit: int = 50 | dict | Get trading signals from database with optional filter |
+| get_btc_arb_status | - | dict | Get BTC arbitrage engine status and current opportunities |
+| update_btc_arb_config | request: dict | dict | Update BTC arbitrage engine configuration |
+| execute_btc_arb | opportunity_id: str | dict | Manually execute BTC arbitrage opportunity |
+| start_btc_arb | - | dict | Start BTC arbitrage engine |
+| stop_btc_arb | - | dict | Stop BTC arbitrage engine |
+| get_btc_arb_executions | limit: int = 50 | dict | Get BTC arbitrage execution history |
 
 ### websocket.py
 WebSocket connection manager for real-time updates
@@ -237,6 +243,38 @@ Automated trading engine with risk management
 | AutoTrader._has_position | ticker: str | bool | Check if already have position in market |
 | AutoTrader._position_count | - | int | Count current open positions |
 | AutoTrader._check_daily_loss | - | bool | Verify daily loss limit not exceeded |
+
+### btc_arb_scanner.py
+BTC arbitrage opportunity detection between range and threshold markets
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| ArbLeg | ticker, market_type, side, action, price_cents, strike?, lower_bound?, upper_bound? | dataclass | Single leg of arbitrage trade |
+| ArbOpportunity | id, event_date, settlement_time, legs, total_cost_cents, guaranteed_payout_cents, edge_cents, edge_percent | dataclass | Complete arbitrage opportunity data |
+| BTCArbitrageScanner | kalshi_client | - | Scanner for BTC arbitrage between KXBTC/KXBTCD markets |
+| BTCArbitrageScanner.scan | min_edge_percent: float = 3.0 | List[ArbOpportunity] | Scan for all profitable arbitrage opportunities |
+| BTCArbitrageScanner._fetch_range_markets | - | List[Dict] | Fetch KXBTC range markets via get_events |
+| BTCArbitrageScanner._fetch_threshold_markets | - | List[Dict] | Fetch KXBTCD threshold markets via get_events |
+| BTCArbitrageScanner._check_range_arbitrage | range_mkt, thresh_lookup, event_date | ArbOpportunity? | Check single range for arbitrage vs thresholds |
+| BTCArbitrageScanner.calculate_trade | opportunity, budget_cents | dict | Calculate trade details for given budget |
+| BTCArbitrageScanner.get_stats | - | dict | Get scanner performance statistics |
+
+### btc_arb_engine.py
+Continuous BTC arbitrage scanning and execution engine
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| EngineConfig | min_edge_percent, budget_cents, auto_trade_enabled, mode, scan_interval_seconds | dataclass | Engine configuration parameters |
+| EngineStatus | is_running, last_scan_at, opportunities_found, auto_executions, last_error | dataclass | Engine runtime status |
+| BTCArbitrageEngine | kalshi_client, db | - | Background engine for continuous BTC arbitrage |
+| BTCArbitrageEngine.start | - | None | Start background scanning loop |
+| BTCArbitrageEngine.stop | - | None | Stop background scanning loop |
+| BTCArbitrageEngine.get_status | - | dict | Get current engine status and config |
+| BTCArbitrageEngine.get_opportunities | - | List[dict] | Get current detected opportunities |
+| BTCArbitrageEngine.update_config | **kwargs | dict | Update engine configuration |
+| BTCArbitrageEngine.manual_execute | opportunity_id | dict | Manually execute specific opportunity |
+| BTCArbitrageEngine._run_loop | - | None | Main scanning loop (every 2 seconds) |
+| BTCArbitrageEngine._auto_execute | opportunity | None | Auto-execute best opportunity with safety controls |
 
 ---
 

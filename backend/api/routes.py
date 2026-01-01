@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from typing import Optional
 from datetime import datetime, timezone
 
@@ -581,3 +581,74 @@ async def get_signals(status: Optional[str] = None, limit: int = 50):
         rows = await cursor.fetchall()
         columns = [d[0] for d in cursor.description]
         return {"signals": [dict(zip(columns, row)) for row in rows]}
+
+
+# ===========================================
+# BTC ARBITRAGE ENGINE (Singleton)
+# ===========================================
+btc_arb_engine_instance: Optional['BTCArbitrageEngine'] = None
+
+def get_btc_arb_engine():
+    global btc_arb_engine_instance
+    if btc_arb_engine_instance is None:
+        from ..services.btc_arb_engine import BTCArbitrageEngine
+        kalshi = KalshiClient()
+        btc_arb_engine_instance = BTCArbitrageEngine(kalshi, db)
+    return btc_arb_engine_instance
+
+
+# ===========================================
+# BTC ARBITRAGE ENDPOINTS
+# ===========================================
+
+@router.get("/btc-arb/status")
+async def get_btc_arb_status():
+    """Get BTC arbitrage engine status and current opportunities."""
+    engine = get_btc_arb_engine()
+    status = await engine.get_status()
+    opportunities = await engine.get_opportunities()
+    return {**status, 'opportunities': opportunities}
+
+
+@router.put("/btc-arb/config")
+async def update_btc_arb_config(request: Request):
+    """Update BTC arbitrage engine configuration."""
+    data = await request.json()
+    engine = get_btc_arb_engine()
+    return await engine.update_config(**data)
+
+
+@router.post("/btc-arb/execute/{opportunity_id}")
+async def execute_btc_arb(opportunity_id: str):
+    """Manually execute a BTC arbitrage opportunity."""
+    engine = get_btc_arb_engine()
+    return await engine.manual_execute(opportunity_id)
+
+
+@router.post("/btc-arb/start")
+async def start_btc_arb_engine():
+    """Start the BTC arbitrage engine."""
+    engine = get_btc_arb_engine()
+    await engine.start()
+    return await engine.get_status()
+
+
+@router.post("/btc-arb/stop")
+async def stop_btc_arb_engine():
+    """Stop the BTC arbitrage engine."""
+    engine = get_btc_arb_engine()
+    await engine.stop()
+    return await engine.get_status()
+
+
+@router.get("/btc-arb/executions")
+async def get_btc_arb_executions(limit: int = 50):
+    """Get BTC arbitrage execution history."""
+    async with db.connection() as conn:
+        cursor = await conn.execute("""
+            SELECT * FROM btc_arb_executions
+            ORDER BY executed_at DESC LIMIT ?
+        """, (limit,))
+        rows = await cursor.fetchall()
+        columns = [d[0] for d in cursor.description]
+        return {'executions': [dict(zip(columns, row)) for row in rows]}

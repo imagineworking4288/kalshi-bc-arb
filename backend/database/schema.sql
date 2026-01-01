@@ -158,3 +158,39 @@ CREATE TABLE IF NOT EXISTS daily_pnl (
 );
 
 CREATE INDEX IF NOT EXISTS idx_daily_pnl_date ON daily_pnl(date);
+
+-- ===========================================
+-- BTC ARBITRAGE TABLES
+-- ===========================================
+
+-- BTC Arbitrage executions
+CREATE TABLE IF NOT EXISTS btc_arb_executions (
+    id TEXT PRIMARY KEY,
+    opportunity_id TEXT NOT NULL,
+    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    mode TEXT NOT NULL,  -- 'paper' or 'live'
+    contracts_per_leg INTEGER NOT NULL,
+    total_cost_cents INTEGER NOT NULL,
+    total_fees_cents INTEGER NOT NULL,
+    guaranteed_profit_cents INTEGER NOT NULL,
+    status TEXT DEFAULT 'open',  -- 'open', 'settled', 'partial'
+    kalshi_response TEXT,
+    settled_at TIMESTAMP,
+    settlement_outcome TEXT,
+    actual_payout_cents INTEGER,
+    actual_profit_cents INTEGER
+);
+
+-- BTC Arbitrage scanner configuration
+CREATE TABLE IF NOT EXISTS btc_arb_config (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    min_edge_percent REAL DEFAULT 3.0,
+    default_budget_cents INTEGER DEFAULT 10000,
+    auto_trade_enabled INTEGER DEFAULT 0,
+    scan_interval_seconds REAL DEFAULT 2.0,
+    max_position_per_opp_cents INTEGER DEFAULT 50000,
+    mode TEXT DEFAULT 'paper',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT OR IGNORE INTO btc_arb_config (id) VALUES (1);

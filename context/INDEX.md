@@ -47,6 +47,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/components/trading | frontend/src/components/trading/ | Trading mode and position management |
 | frontend/components/watchlist | frontend/src/components/watchlist/ | Saved markets management |
 | frontend/components/autotrader | frontend/src/components/autotrader/ | Automated trading and edge detection |
+| frontend/components/btcarb | frontend/src/components/btcarb/ | BTC arbitrage monitoring and control |
 | frontend/hooks | frontend/src/hooks/ | Custom React hooks |
 | frontend/services | frontend/src/services/ | Backend API client |
 | frontend/stores | frontend/src/stores/ | Zustand state management |
@@ -96,6 +97,8 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/services/watchlist_service.py | Saved markets management service |
 | backend/services/edge_detector.py | Detects mispriced markets using probability models |
 | backend/services/auto_trader.py | Automated trading engine with risk management |
+| backend/services/btc_arb_scanner.py | BTC arbitrage opportunity detection scanner |
+| backend/services/btc_arb_engine.py | Continuous BTC arbitrage scanning engine |
 | backend/utils/__init__.py | Utils module exports |
 | backend/utils/kalshi_auth.py | RSA-PSS signature authentication |
 | data/.gitkeep | Placeholder for SQLite database |
@@ -129,6 +132,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/src/components/trading/TradingTab.tsx | Trading dashboard view |
 | frontend/src/components/watchlist/WatchlistTab.tsx | Saved markets with live prices |
 | frontend/src/components/autotrader/AutoTraderTab.tsx | Auto-trading control panel and signal monitoring |
+| frontend/src/components/btcarb/BTCArbitrageTab.tsx | BTC arbitrage scanner monitoring interface |
 | frontend/src/hooks/useSpotPrice.ts | Live BTC price polling hook |
 | frontend/src/services/api.ts | Backend HTTP API client |
 | frontend/src/stores/opportunityStore.ts | Opportunities Zustand store |

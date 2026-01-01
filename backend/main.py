@@ -36,11 +36,29 @@ async def lifespan(app: FastAPI):
     print(f"AutoTrader initialized (mode: {routes.auto_trader_instance._mode_name()})")
     print("=" * 50)
 
+    # Initialize BTC Arbitrage Engine
+    try:
+        btc_arb_engine = routes.get_btc_arb_engine()
+        await btc_arb_engine.start()
+        print("[STARTUP] BTC Arbitrage Engine started")
+        print("=" * 50)
+    except Exception as e:
+        print(f"[STARTUP] BTC Arbitrage Engine failed to start: {e}")
+
     yield
 
     # Shutdown
     if routes.auto_trader_instance and routes.auto_trader_instance.is_running:
         await routes.auto_trader_instance.stop()
+
+    # Shutdown BTC arbitrage engine
+    try:
+        btc_arb_engine = routes.get_btc_arb_engine()
+        await btc_arb_engine.stop()
+        print("[SHUTDOWN] BTC Arbitrage Engine stopped")
+    except Exception as e:
+        print(f"[SHUTDOWN] Error stopping BTC arbitrage engine: {e}")
+
     print("Shutting down...")
 
 
