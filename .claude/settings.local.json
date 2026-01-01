@@ -16,7 +16,13 @@
       "Bash(python:*)",
       "Bash(../venv/Scripts/python.exe -c \"import sys; sys.path.insert\\(0, ''..''\\); from backend.api.routes import get_opportunities; import asyncio; result = asyncio.run\\(get_opportunities\\(min_profit=0.1\\)\\); print\\(f''Opportunities: {result[\"\"count\"\"]}''\\); print\\(f''Paper mode: {result[\"\"paper_mode\"\"]}''\\); print\\(f''Groups processed: {len\\(result[\"\"opportunities\"\"]\\)}''\\)\")",
       "Bash(if exist datakalshi_arb.db del datakalshi_arb.db)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(.backend\\\\venv\\\\Scripts\\\\python.exe -m uvicorn:*)",
+      "Bash(cat:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(tasklist:*)"
     ]
   }
 }

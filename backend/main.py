@@ -16,7 +16,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     mode = "PAPER" if settings.paper_trading_mode else "LIVE"
     print("=" * 50)
-    print("Kalshi Arbitrage Scanner")
+    print("Kalshi Trading Platform")
     print(f"Trading Mode: {mode}")
     print(f"Database: {settings.database_path}")
     print("=" * 50)
@@ -25,8 +25,22 @@ async def lifespan(app: FastAPI):
         print("WARNING: Live trading is enabled!")
         print("WARNING: Real money will be used for trades!")
 
+    # Initialize auto-trader
+    from .api import routes
+    from .services.auto_trader import AutoTrader
+    from .services.kalshi_client import KalshiClient
+
+    kalshi_client = KalshiClient()
+    routes.auto_trader_instance = AutoTrader(kalshi_client, db)
+    await routes.auto_trader_instance.load_config()
+    print(f"AutoTrader initialized (mode: {routes.auto_trader_instance._mode_name()})")
+    print("=" * 50)
+
     yield
 
+    # Shutdown
+    if routes.auto_trader_instance and routes.auto_trader_instance.is_running:
+        await routes.auto_trader_instance.stop()
     print("Shutting down...")
 
 

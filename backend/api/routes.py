@@ -3,6 +3,7 @@ from typing import Optional
 from datetime import datetime, timezone
 
 from ..config import get_settings
+from ..database.connection import db
 from ..models.schemas import ExecuteRequest, ResetRequest, TradeRequest, WatchlistAddRequest
 from ..services import (
     KalshiClient,
@@ -507,3 +508,76 @@ async def remove_from_watchlist(ticker: str):
     if not success:
         raise HTTPException(404, f"Market {ticker} not in watchlist")
     return {"message": f"Removed {ticker} from watchlist"}
+
+
+# ============== AUTO-TRADER ==============
+
+# Auto-trader instance (initialized on startup)
+auto_trader_instance = None
+
+
+@router.get("/auto-trader/status")
+async def get_auto_trader_status():
+    """Get current auto-trader status and configuration."""
+    if not auto_trader_instance:
+        return {"enabled": 0, "mode": "NOT INITIALIZED", "is_running": False}
+    return await auto_trader_instance.get_status()
+
+
+@router.post("/auto-trader/config")
+async def update_auto_trader_config(request: dict):
+    """Update auto-trader configuration."""
+    if not auto_trader_instance:
+        raise HTTPException(500, "Auto-trader not initialized")
+
+    return await auto_trader_instance.update_config(**request)
+
+
+@router.post("/auto-trader/start")
+async def start_auto_trader():
+    """Start the auto-trader."""
+    if not auto_trader_instance:
+        raise HTTPException(500, "Auto-trader not initialized")
+
+    await auto_trader_instance.start()
+    return {"success": True, "status": await auto_trader_instance.get_status()}
+
+
+@router.post("/auto-trader/stop")
+async def stop_auto_trader():
+    """Stop the auto-trader."""
+    if not auto_trader_instance:
+        raise HTTPException(500, "Auto-trader not initialized")
+
+    await auto_trader_instance.stop()
+    return {"success": True, "status": await auto_trader_instance.get_status()}
+
+
+@router.get("/auto-trader/scan")
+async def manual_scan():
+    """Manually trigger edge scan without executing trades."""
+    if not auto_trader_instance:
+        raise HTTPException(500, "Auto-trader not initialized")
+
+    signals = await auto_trader_instance.manual_scan()
+    return {"signals": signals, "count": len(signals)}
+
+
+@router.get("/auto-trader/signals")
+async def get_signals(status: Optional[str] = None, limit: int = 50):
+    """Get trading signals from database."""
+    query = "SELECT * FROM trading_signals"
+    params = []
+
+    if status:
+        query += " WHERE status = ?"
+        params.append(status)
+
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+
+    async with db.connection() as conn:
+        cursor = await conn.execute(query, params)
+        rows = await cursor.fetchall()
+        columns = [d[0] for d in cursor.description]
+        return {"signals": [dict(zip(columns, row)) for row in rows]}

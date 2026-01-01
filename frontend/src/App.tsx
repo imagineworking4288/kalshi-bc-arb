@@ -7,10 +7,11 @@ import { AnalyticsTab } from './components/analytics/AnalyticsTab';
 import { TradeTab } from './components/trade/TradeTab';
 import { PortfolioTab } from './components/portfolio/PortfolioTab';
 import { WatchlistTab } from './components/watchlist/WatchlistTab';
+import { AutoTraderTab } from './components/autotrader/AutoTraderTab';
 import { useTradingStore } from './stores/tradingStore';
 import { api } from './services/api';
 
-type Tab = 'trade' | 'portfolio' | 'watchlist' | 'opportunities' | 'trading' | 'analytics';
+type Tab = 'trade' | 'portfolio' | 'watchlist' | 'opportunities' | 'trading' | 'analytics' | 'autotrader';
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('trade');
@@ -45,6 +46,7 @@ function App() {
         {activeTab === 'opportunities' && <OpportunitiesTab />}
         {activeTab === 'trading' && <TradingTab />}
         {activeTab === 'analytics' && <AnalyticsTab />}
+        {activeTab === 'autotrader' && <AutoTraderTab />}
       </main>
     </div>
   );

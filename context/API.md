@@ -47,6 +47,12 @@ HTTP REST API endpoints for opportunities and trading
 | get_watchlist | - | dict | Get all watchlist items with fresh prices |
 | add_to_watchlist | request: WatchlistAddRequest | dict | Add market to watchlist |
 | remove_from_watchlist | ticker: str | dict | Remove market from watchlist |
+| get_auto_trader_status | - | dict | Get current auto-trader status and configuration |
+| update_auto_trader_config | request: dict | dict | Update auto-trader configuration parameters |
+| start_auto_trader | - | dict | Start the auto-trader background process |
+| stop_auto_trader | - | dict | Stop the auto-trader background process |
+| manual_scan | - | dict | Manually trigger edge scan without executing trades |
+| get_signals | status?: str, limit: int = 50 | dict | Get trading signals from database with optional filter |
 
 ### websocket.py
 WebSocket connection manager for real-time updates
@@ -196,6 +202,41 @@ Saved markets management with live price updates
 | WatchlistService.add | ticker: str, notes?: str | dict | Fetch market details from Kalshi and save to database |
 | WatchlistService.remove | ticker: str | bool | Delete market from watchlist |
 | WatchlistService.get_all | - | List[dict] | Get all watchlist items with fresh prices from Kalshi |
+
+### edge_detector.py
+Market edge detection using probability models
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| EdgeDetector | kalshi_client, db | - | Initialize with Kalshi client and database connection |
+| EdgeDetector.load_config | - | None | Load minimum edge threshold from database |
+| EdgeDetector.scan_btc_markets | - | List[TradingSignal] | Scan Bitcoin markets for pricing edges |
+| EdgeDetector._analyze_btc_market | market: dict, current_btc: float | TradingSignal \| None | Analyze single BTC market for edge opportunities |
+| EdgeDetector._parse_btc_strike | ticker: str | float \| None | Extract strike price from BTC market ticker |
+| EdgeDetector._calculate_btc_probability | current: float, strike: float, market: dict | float | Calculate probability using logistic function |
+| EdgeDetector._calculate_position_size | edge_percent: float | int | Kelly Criterion position sizing |
+| EdgeDetector.save_signal | signal: TradingSignal | int | Save trading signal to database |
+| EdgeDetector.get_pending_signals | - | List[dict] | Get all pending signals from database |
+| TradingSignal | ticker, signal_type, edge_percent, model_prob, market_price, recommended_size, source | - | Dataclass for trading signal data |
+
+### auto_trader.py
+Automated trading engine with risk management
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| AutoTrader | kalshi_client, db | - | Initialize with Kalshi client and database connection |
+| AutoTrader.load_config | - | None | Load configuration from database |
+| AutoTrader.start | - | None | Start background trading loop |
+| AutoTrader.stop | - | None | Stop background trading loop |
+| AutoTrader.get_status | - | dict | Get current status and configuration |
+| AutoTrader.update_config | **kwargs | dict | Update configuration parameters |
+| AutoTrader.manual_scan | - | List[TradingSignal] | Run edge scan without executing trades |
+| AutoTrader._run_loop | - | None | Main trading loop (runs every 60 seconds) |
+| AutoTrader._scan_and_trade | - | None | Scan for edges and execute qualifying trades |
+| AutoTrader._process_signal | signal: TradingSignal | None | Process single trading signal with risk checks |
+| AutoTrader._has_position | ticker: str | bool | Check if already have position in market |
+| AutoTrader._position_count | - | int | Count current open positions |
+| AutoTrader._check_daily_loss | - | bool | Verify daily loss limit not exceeded |
 
 ---
 

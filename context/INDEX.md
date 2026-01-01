@@ -46,6 +46,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/components/trade | frontend/src/components/trade/ | Manual trading interface |
 | frontend/components/trading | frontend/src/components/trading/ | Trading mode and position management |
 | frontend/components/watchlist | frontend/src/components/watchlist/ | Saved markets management |
+| frontend/components/autotrader | frontend/src/components/autotrader/ | Automated trading and edge detection |
 | frontend/hooks | frontend/src/hooks/ | Custom React hooks |
 | frontend/services | frontend/src/services/ | Backend API client |
 | frontend/stores | frontend/src/stores/ | Zustand state management |
@@ -93,6 +94,8 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/services/spot_price_client.py | Free API BTC price client (CoinGecko/CoinLore) |
 | backend/services/trade_executor.py | Routes trades to paper or live |
 | backend/services/watchlist_service.py | Saved markets management service |
+| backend/services/edge_detector.py | Detects mispriced markets using probability models |
+| backend/services/auto_trader.py | Automated trading engine with risk management |
 | backend/utils/__init__.py | Utils module exports |
 | backend/utils/kalshi_auth.py | RSA-PSS signature authentication |
 | data/.gitkeep | Placeholder for SQLite database |
@@ -125,6 +128,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/src/components/trading/TradeHistory.tsx | Historical trades list |
 | frontend/src/components/trading/TradingTab.tsx | Trading dashboard view |
 | frontend/src/components/watchlist/WatchlistTab.tsx | Saved markets with live prices |
+| frontend/src/components/autotrader/AutoTraderTab.tsx | Auto-trading control panel and signal monitoring |
 | frontend/src/hooks/useSpotPrice.ts | Live BTC price polling hook |
 | frontend/src/services/api.ts | Backend HTTP API client |
 | frontend/src/stores/opportunityStore.ts | Opportunities Zustand store |

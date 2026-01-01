@@ -117,6 +117,46 @@
 | notes | TEXT | Optional user notes |
 | added_at | TIMESTAMP | When added to watchlist |
 
+### trading_signals
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | INTEGER PRIMARY KEY | Auto-incrementing signal ID |
+| ticker | TEXT | Kalshi market ticker |
+| signal_type | TEXT | Signal type: 'buy_yes', 'buy_no', 'sell_yes', 'sell_no' |
+| edge_percent | REAL | Edge percentage (e.g., 15.5 = 15.5% edge) |
+| model_prob | REAL | Model's probability estimate (0.0-1.0) |
+| market_price | INTEGER | Current market price in cents |
+| recommended_size | INTEGER | Suggested position size |
+| source | TEXT | Signal source: 'btc_price_model', 'manual', etc. |
+| status | TEXT | Signal status: 'pending', 'executed', 'expired', 'rejected' |
+| created_at | TIMESTAMP | When signal was generated |
+| executed_at | TIMESTAMP | When signal was executed (if applicable) |
+| execution_price | INTEGER | Actual execution price in cents (if executed) |
+| notes | TEXT | Additional signal notes and context |
+
+### auto_trader_config
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | INTEGER PRIMARY KEY | Always 1, single row table |
+| enabled | INTEGER | Trading mode: 0=disabled, 1=paper only, 2=live enabled |
+| min_edge_percent | REAL | Minimum edge required to trade |
+| max_position_size | INTEGER | Maximum contracts per market |
+| max_daily_loss_cents | INTEGER | Maximum daily loss limit in cents |
+| max_open_positions | INTEGER | Maximum number of open positions |
+| allowed_series | TEXT | Comma-separated series tickers to trade |
+| updated_at | TIMESTAMP | Last configuration update |
+
+### daily_pnl
+
+| Field | Type | Description |
+|-------|------|-------------|
+| date | TEXT PRIMARY KEY | Trading date in YYYY-MM-DD format |
+| realized_pnl_cents | INTEGER | Realized P&L for the day in cents |
+| trades_count | INTEGER | Number of trades executed |
+| updated_at | TIMESTAMP | Last update timestamp |
+
 ---
 
 ## Backend Request Models
