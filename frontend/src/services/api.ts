@@ -155,4 +155,7 @@ export const api = {
     fetchJson<{ message: string }>(`/watchlist/${ticker}`, {
       method: 'DELETE'
     }),
+
+  // Weather Arbitrage
+  getWeatherStatus: () => fetchJson<any>('/weather-arb/status'),
 };
