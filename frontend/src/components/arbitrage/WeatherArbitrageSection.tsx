@@ -243,17 +243,109 @@ function BracketTable({
             </tr>
           </thead>
           <tbody>
-            {series.brackets?.map((bracket) => {
-              return (
-                <tr key={bracket.ticker} className="border-t border-gray-700">
-                  <td className="p-3 font-mono text-sm">{bracket.title || bracket.ticker}</td>
-                  <td className="p-3 text-right text-green-400">{bracket.yes_ask}c</td>
-                  <td className="p-3 text-right text-gray-400">{bracket.yes_bid}c</td>
-                  <td className="p-3 text-right text-gray-400">{bracket.volume?.toLocaleString() ?? 0}</td>
-                  <td className="p-3 text-sm text-gray-500"></td>
-                </tr>
-              );
-            })}
+            {series.brackets && series.brackets.length > 0 ? (
+              series.brackets.map((bracket: any) => {
+                // Smart bracket label extraction from title
+                const getBracketLabel = (): string => {
+                  if (bracket.title) {
+                    const title = bracket.title;
+
+                    // Match "32-33°" or "32-33°F"
+                    const rangeMatch = title.match(/(\d+)\s*[-–]\s*(\d+)°/);
+                    if (rangeMatch) {
+                      return `${rangeMatch[1]}–${rangeMatch[2]}°F`;
+                    }
+
+                    // Match ">35°" or ">=35°" or "be >35°"
+                    const gtMatch = title.match(/>\s*=?\s*(\d+)°/);
+                    if (gtMatch) {
+                      return `≥${gtMatch[1]}°F`;
+                    }
+
+                    // Match "<28°" or "<=28°" or "be <28°"
+                    const ltMatch = title.match(/<\s*=?\s*(\d+)°/);
+                    if (ltMatch) {
+                      return `≤${ltMatch[1]}°F`;
+                    }
+                  }
+
+                  // Fallback to ticker suffix
+                  return bracket.ticker?.split('-').pop() || 'Unknown';
+                };
+
+                // Parse temps for forecast matching
+                const getParsedTemps = (): { low: number | null; high: number | null } => {
+                  if (bracket.title) {
+                    const rangeMatch = bracket.title.match(/(\d+)\s*[-–]\s*(\d+)°/);
+                    if (rangeMatch) {
+                      return { low: parseInt(rangeMatch[1]), high: parseInt(rangeMatch[2]) };
+                    }
+                    const gtMatch = bracket.title.match(/>\s*=?\s*(\d+)°/);
+                    if (gtMatch) {
+                      return { low: parseInt(gtMatch[1]), high: null };
+                    }
+                    const ltMatch = bracket.title.match(/<\s*=?\s*(\d+)°/);
+                    if (ltMatch) {
+                      return { low: null, high: parseInt(ltMatch[1]) };
+                    }
+                  }
+                  return { low: null, high: null };
+                };
+
+                // Check if forecast falls in this bracket
+                const temps = getParsedTemps();
+                const isForecastBracket = forecastTemp != null && (() => {
+                  const { low, high } = temps;
+                  if (low !== null && high !== null) {
+                    return forecastTemp >= low && forecastTemp <= high;
+                  }
+                  if (low !== null && high === null) {
+                    return forecastTemp >= low;
+                  }
+                  if (low === null && high !== null) {
+                    return forecastTemp <= high;
+                  }
+                  return false;
+                })();
+
+                return (
+                  <tr
+                    key={bracket.ticker}
+                    className={`border-t border-gray-700 transition-colors ${
+                      isForecastBracket ? 'bg-blue-500/30 border-l-4 border-l-blue-400' : ''
+                    }`}
+                  >
+                    <td className="p-3 font-mono text-sm">
+                      {getBracketLabel()}
+                    </td>
+                    <td className="p-3 text-right text-green-400 font-medium">
+                      {bracket.yes_ask ?? 0}¢
+                    </td>
+                    <td className="p-3 text-right text-gray-400">
+                      {bracket.yes_bid ?? 0}¢
+                    </td>
+                    <td className="p-3 text-right text-gray-400">
+                      {(bracket.volume ?? 0).toLocaleString()}
+                    </td>
+                    <td className="p-3 text-sm text-blue-400">
+                      {isForecastBracket && `← Forecast: ${forecastTemp}°F`}
+                    </td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-gray-400">
+                  <div className="text-lg mb-2">No markets available</div>
+                  <div className="text-sm">
+                    {type === 'low'
+                      ? 'Kalshi may not offer LOW temperature markets for this city/date'
+                      : 'No bracket markets found for this series'
+                    }
+                  </div>
+                </td>
+              </tr>
+            )}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-gray-600 bg-gray-700/50 font-bold">

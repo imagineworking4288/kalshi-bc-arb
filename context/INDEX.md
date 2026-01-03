@@ -135,7 +135,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/src/components/analytics/AnalyticsTab.tsx | P&L summary dashboard |
 | frontend/src/components/arbitrage/ArbitrageHub.tsx | Main arbitrage hub with sub-navigation |
 | frontend/src/components/arbitrage/CryptoArbitrageSection.tsx | Crypto arbitrage scanner with card-based UI |
-| frontend/src/components/arbitrage/WeatherArbitrageSection.tsx | Weather arbitrage scanner placeholder |
+| frontend/src/components/arbitrage/WeatherArbitrageSection.tsx | Weather arbitrage scanner with forecast highlighting |
 | frontend/src/components/arbitrage/shared/StatsBar.tsx | Reusable statistics display component |
 | frontend/src/components/arbitrage/shared/ConfigPanel.tsx | Reusable configuration controls component |
 | frontend/src/components/arbitrage/shared/OpportunityTable.tsx | Reusable opportunity table component |
@@ -161,4 +161,5 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/src/stores/opportunityStore.ts | Opportunities Zustand store |
 | frontend/src/stores/tradingStore.ts | Trading state Zustand store |
 | frontend/src/types/index.ts | TypeScript interfaces |
+| frontend/src/types/weather.ts | Weather arbitrage type definitions |
 | frontend/src/utils/format.ts | Currency and time formatters |

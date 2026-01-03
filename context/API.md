@@ -526,11 +526,12 @@ Crypto arbitrage scanner with card-based UI
 | CryptoArbitrageSection | - | JSX.Element | Two-mode UI: overview cards (BTC/ETH/SOL/XRP) and detailed scanner view |
 
 ### WeatherArbitrageSection.tsx
-Weather arbitrage scanner placeholder
+Weather arbitrage scanner with forecast highlighting
 
 | Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
-| WeatherArbitrageSection | - | JSX.Element | City cards grid (NYC/Chicago/Miami/Austin/LA/Denver) with coming soon badges |
+| WeatherArbitrageSection | - | JSX.Element | 7-city grid with NWS forecasts, expandable bracket tables, forecast row highlighting |
+| BracketTable | city, type, onTypeChange, onClose | JSX.Element | Modal table showing bracket prices with smart temperature parsing |
 
 ### shared/StatsBar.tsx
 Reusable statistics display component
@@ -704,3 +705,23 @@ Weather location definitions for 7 major cities
 | get_location | code: str | LocationConfig | Get location config by code |
 | get_all_locations | - | List[LocationConfig] | Get all 7 location configs |
 | get_all_series | - | List[str] | Get all 14 series tickers (7 cities × 2 types) |
+
+---
+
+## frontend/src/types/
+
+### weather.ts
+Weather arbitrage TypeScript type definitions
+
+| Interface/Type | Description |
+|----------------|-------------|
+| WeatherStatus | Main scanner status with cities, opportunities, forecasts, stats |
+| CityResult | Single city data with high/low series results |
+| SeriesResult | Temperature series with brackets, costs, opportunities |
+| BracketMarket | Individual bracket with ticker, prices, volume |
+| WeatherOpportunity | Arbitrage opportunity with profit calculations |
+| ForecastData | NWS weather forecast with detailed descriptions |
+| CostStatus | Union type: 'opportunity' \| 'near_miss' \| 'neutral' \| 'negative' |
+| getCostStatus | cost: number \| null | CostStatus | Classify bracket total cost |
+| getCostColor | status: CostStatus | string | Get Tailwind text color class |
+| getCostBgColor | status: CostStatus | string | Get Tailwind background color class |
