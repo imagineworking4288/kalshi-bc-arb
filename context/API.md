@@ -526,12 +526,15 @@ Crypto arbitrage scanner with card-based UI
 | CryptoArbitrageSection | - | JSX.Element | Two-mode UI: overview cards (BTC/ETH/SOL/XRP) and detailed scanner view |
 
 ### WeatherArbitrageSection.tsx
-Weather arbitrage scanner with forecast highlighting
+Weather arbitrage scanner with forecast highlighting and bracket sorting
 
 | Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
+| parseBracketTemp | title: string | {low, high, sortKey} | Parse temperature ranges from bracket titles for sorting and matching |
+| sortBrackets | brackets: any[] | any[] | Sort brackets by temperature (≤X°F first, ranges by low bound, ≥X°F last) |
+| isForecastInBracket | forecastTemp: number, temps: {low, high} | boolean | Check if forecast temperature falls within bracket range |
 | WeatherArbitrageSection | - | JSX.Element | 7-city grid with NWS forecasts, expandable bracket tables, forecast row highlighting |
-| BracketTable | city, type, onTypeChange, onClose | JSX.Element | Modal table showing bracket prices with smart temperature parsing |
+| BracketTable | city, type, onTypeChange, onClose | JSX.Element | Modal table showing sorted bracket prices with forecast highlighting and smart temperature parsing |
 
 ### shared/StatsBar.tsx
 Reusable statistics display component

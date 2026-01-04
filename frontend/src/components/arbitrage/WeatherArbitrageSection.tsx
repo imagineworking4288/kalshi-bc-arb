@@ -20,6 +20,62 @@ const CITY_NAMES: Record<string, string> = {
   PHL: 'Philadelphia'
 };
 
+// Parse temperature from bracket title for sorting and matching
+function parseBracketTemp(title: string): { low: number | null; high: number | null; sortKey: number } {
+  // Match "32-33°" or "32-33°F" (range brackets)
+  const rangeMatch = title.match(/(\d+)\s*[-–]\s*(\d+)°/);
+  if (rangeMatch) {
+    const low = parseInt(rangeMatch[1]);
+    const high = parseInt(rangeMatch[2]);
+    return { low, high, sortKey: low };
+  }
+
+  // Match ">35°" or ">=35°" (greater than brackets - highest sort key)
+  const gtMatch = title.match(/>\s*=?\s*(\d+)°/);
+  if (gtMatch) {
+    return { low: parseInt(gtMatch[1]), high: null, sortKey: 999 };
+  }
+
+  // Match "<28°" or "<=28°" (less than brackets - lowest sort key)
+  const ltMatch = title.match(/<\s*=?\s*(\d+)°/);
+  if (ltMatch) {
+    return { low: null, high: parseInt(ltMatch[1]), sortKey: -999 };
+  }
+
+  return { low: null, high: null, sortKey: 0 };
+}
+
+// Sort brackets by temperature (lowest to highest, with < at start and > at end)
+function sortBrackets(brackets: any[]): any[] {
+  return [...brackets].sort((a, b) => {
+    const aTemp = parseBracketTemp(a.title || '');
+    const bTemp = parseBracketTemp(b.title || '');
+    return aTemp.sortKey - bTemp.sortKey;
+  });
+}
+
+// Check if forecast temperature falls within bracket range
+function isForecastInBracket(forecastTemp: number, temps: { low: number | null; high: number | null }): boolean {
+  const { low, high } = temps;
+
+  // Range bracket: 32-33°F means temp >= 32 AND temp < 34 (exclusive upper bound)
+  if (low !== null && high !== null) {
+    return forecastTemp >= low && forecastTemp <= high;
+  }
+
+  // Greater than bracket: >=35°F
+  if (low !== null && high === null) {
+    return forecastTemp >= low;
+  }
+
+  // Less than bracket: <=28°F
+  if (low === null && high !== null) {
+    return forecastTemp <= high;
+  }
+
+  return false;
+}
+
 export default function WeatherArbitrageSection() {
   const [status, setStatus] = useState<WeatherStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -244,69 +300,27 @@ function BracketTable({
           </thead>
           <tbody>
             {series.brackets && series.brackets.length > 0 ? (
-              series.brackets.map((bracket: any) => {
-                // Smart bracket label extraction from title
+              sortBrackets(series.brackets).map((bracket: any) => {
+                // Parse temperature range for display and matching
+                const temps = parseBracketTemp(bracket.title || '');
+
+                // Format bracket label
                 const getBracketLabel = (): string => {
-                  if (bracket.title) {
-                    const title = bracket.title;
-
-                    // Match "32-33°" or "32-33°F"
-                    const rangeMatch = title.match(/(\d+)\s*[-–]\s*(\d+)°/);
-                    if (rangeMatch) {
-                      return `${rangeMatch[1]}–${rangeMatch[2]}°F`;
-                    }
-
-                    // Match ">35°" or ">=35°" or "be >35°"
-                    const gtMatch = title.match(/>\s*=?\s*(\d+)°/);
-                    if (gtMatch) {
-                      return `≥${gtMatch[1]}°F`;
-                    }
-
-                    // Match "<28°" or "<=28°" or "be <28°"
-                    const ltMatch = title.match(/<\s*=?\s*(\d+)°/);
-                    if (ltMatch) {
-                      return `≤${ltMatch[1]}°F`;
-                    }
+                  if (temps.low !== null && temps.high !== null) {
+                    return `${temps.low}–${temps.high}°F`;
                   }
-
+                  if (temps.low !== null && temps.high === null) {
+                    return `≥${temps.low}°F`;
+                  }
+                  if (temps.low === null && temps.high !== null) {
+                    return `≤${temps.high}°F`;
+                  }
                   // Fallback to ticker suffix
                   return bracket.ticker?.split('-').pop() || 'Unknown';
                 };
 
-                // Parse temps for forecast matching
-                const getParsedTemps = (): { low: number | null; high: number | null } => {
-                  if (bracket.title) {
-                    const rangeMatch = bracket.title.match(/(\d+)\s*[-–]\s*(\d+)°/);
-                    if (rangeMatch) {
-                      return { low: parseInt(rangeMatch[1]), high: parseInt(rangeMatch[2]) };
-                    }
-                    const gtMatch = bracket.title.match(/>\s*=?\s*(\d+)°/);
-                    if (gtMatch) {
-                      return { low: parseInt(gtMatch[1]), high: null };
-                    }
-                    const ltMatch = bracket.title.match(/<\s*=?\s*(\d+)°/);
-                    if (ltMatch) {
-                      return { low: null, high: parseInt(ltMatch[1]) };
-                    }
-                  }
-                  return { low: null, high: null };
-                };
-
                 // Check if forecast falls in this bracket
-                const temps = getParsedTemps();
-                const isForecastBracket = forecastTemp != null && (() => {
-                  const { low, high } = temps;
-                  if (low !== null && high !== null) {
-                    return forecastTemp >= low && forecastTemp <= high;
-                  }
-                  if (low !== null && high === null) {
-                    return forecastTemp >= low;
-                  }
-                  if (low === null && high !== null) {
-                    return forecastTemp <= high;
-                  }
-                  return false;
-                })();
+                const isForecastBracket = forecastTemp != null && isForecastInBracket(forecastTemp, temps);
 
                 return (
                   <tr
@@ -368,9 +382,9 @@ function BracketTable({
 
       <div className="p-4 border-t border-gray-700 bg-gray-700/30 text-sm text-gray-400">
         <div className="flex justify-between">
-          <span>Series: {series.series}</span>
-          <span>{series.bracket_count} brackets</span>
-          {forecastTemp != null && <span>NWS Forecast: {forecastTemp}F</span>}
+          <span>Series: {series.series || `${city.code}-${type.toUpperCase()}`}</span>
+          <span>{series.bracket_count ?? series.brackets?.length ?? 0} brackets</span>
+          {forecastTemp != null && <span>NWS Forecast: {forecastTemp}°F</span>}
         </div>
       </div>
     </div>
