@@ -530,7 +530,7 @@ Weather arbitrage scanner with forecast highlighting and bracket sorting
 
 | Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
-| getBracketLabel | bracket: BracketMarket | string | Generate label from Kalshi floor_strike/cap_strike (e.g., "≤49°F", "49-58°F", "≥83°F") |
+| getBracketLabel | bracket: BracketMarket | string | Extract temperature label from Kalshi title (e.g., "be 61-62°" → "61-62°F") |
 | sortBrackets | brackets: BracketMarket[] | BracketMarket[] | Sort brackets by floor_strike ascending (open-ended lower first, then ranges, then open-ended upper) |
 | isForecastInBracket | bracket: BracketMarket, forecastTemp: number | boolean | Check if forecast temperature falls within bracket's floor_strike to cap_strike range |
 | WeatherArbitrageSection | - | JSX.Element | 7-city grid with NWS forecasts, expandable bracket tables, forecast row highlighting |

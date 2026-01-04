@@ -73,6 +73,9 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | File | Description |
 |------|-------------|
 | README.md | Project documentation and setup |
+| ARCHITECTURE.md | 4-terminal architecture documentation |
+| QUICKSTART.md | First time setup guide |
+| docker-compose.yml | Docker container configuration |
 | MVP_IMPLEMENTATION.md | Implementation guide and roadmap |
 | .claude/settings.local.json | Claude configuration settings |
 | backend/main.py | FastAPI app entry point |
@@ -84,7 +87,6 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/config/locations/registry.py | Weather location definitions (7 cities) |
 | diagnose_kalshi.py | Legacy Kalshi API test script |
 | diagnose_kalshi_v2.py | Updated API diagnostic with auth tests |
-| package-lock.json | NPM dependency lock file |
 | start.bat | Windows batch 4-terminal launcher script |
 | stop.bat | Stop all Kalshi platform services |
 | run_scanners.py | Scanner service entry point |
@@ -123,6 +125,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | keys/kalshi-private-key.pem | RSA private key for Kalshi |
 | frontend/index.html | Main HTML template |
 | frontend/package.json | NPM dependencies and scripts |
+| frontend/package-lock.json | NPM dependency lock file |
 | frontend/postcss.config.js | PostCSS config for Tailwind |
 | frontend/tailwind.config.js | Tailwind CSS configuration |
 | frontend/tsconfig.json | TypeScript compiler options |
