@@ -530,11 +530,11 @@ Weather arbitrage scanner with forecast highlighting and bracket sorting
 
 | Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
-| parseBracketTemp | title: string | {low, high, sortKey} | Parse temperature ranges from bracket titles for sorting and matching |
-| sortBrackets | brackets: any[] | any[] | Sort brackets by temperature (≤X°F first, ranges by low bound, ≥X°F last) |
-| isForecastInBracket | forecastTemp: number, temps: {low, high} | boolean | Check if forecast temperature falls within bracket range |
+| getBracketLabel | bracket: BracketMarket | string | Generate label from Kalshi floor_strike/cap_strike (e.g., "≤49°F", "49-58°F", "≥83°F") |
+| sortBrackets | brackets: BracketMarket[] | BracketMarket[] | Sort brackets by floor_strike ascending (open-ended lower first, then ranges, then open-ended upper) |
+| isForecastInBracket | bracket: BracketMarket, forecastTemp: number | boolean | Check if forecast temperature falls within bracket's floor_strike to cap_strike range |
 | WeatherArbitrageSection | - | JSX.Element | 7-city grid with NWS forecasts, expandable bracket tables, forecast row highlighting |
-| BracketTable | city, type, onTypeChange, onClose | JSX.Element | Modal table showing sorted bracket prices with forecast highlighting and smart temperature parsing |
+| BracketTable | city, type, onTypeChange, onClose | JSX.Element | Modal table showing sorted bracket prices with forecast highlighting using Kalshi strike fields |
 
 ### shared/StatsBar.tsx
 Reusable statistics display component
@@ -721,7 +721,7 @@ Weather arbitrage TypeScript type definitions
 | WeatherStatus | Main scanner status with cities, opportunities, forecasts, stats |
 | CityResult | Single city data with high/low series results |
 | SeriesResult | Temperature series with brackets, costs, opportunities |
-| BracketMarket | Individual bracket with ticker, prices, volume |
+| BracketMarket | Individual bracket with ticker, floor_strike, cap_strike, prices, volume |
 | WeatherOpportunity | Arbitrage opportunity with profit calculations |
 | ForecastData | NWS weather forecast with detailed descriptions |
 | CostStatus | Union type: 'opportunity' \| 'near_miss' \| 'neutral' \| 'negative' |

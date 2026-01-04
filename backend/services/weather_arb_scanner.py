@@ -224,6 +224,8 @@ class WeatherArbScanner:
                     brackets.append({
                         "ticker": market.get("ticker"),
                         "title": market.get("title", ""),
+                        "floor_strike": market.get("floor_strike"),
+                        "cap_strike": market.get("cap_strike"),
                         "yes_ask": yes_ask,
                         "yes_bid": market.get("yes_bid", 0),
                         "volume": market.get("volume", 0)

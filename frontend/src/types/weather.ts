@@ -38,6 +38,8 @@ export interface SeriesResult {
 export interface BracketMarket {
   ticker: string;
   title: string;
+  floor_strike: number | null;
+  cap_strike: number | null;
   yes_ask: number;
   yes_bid: number;
   volume: number;

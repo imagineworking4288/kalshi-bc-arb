@@ -610,3 +610,55 @@
 | label | string | Column header text |
 | align | 'left' \| 'right' \| 'center' | Text alignment |
 | bold | boolean | Whether header should be bold |
+
+---
+
+## Weather Types (frontend/src/types/weather.ts)
+
+### BracketMarket
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ticker | string | Kalshi market ticker |
+| title | string | Market title text |
+| floor_strike | number \| null | Lower temperature bound (null for ≤X brackets) |
+| cap_strike | number \| null | Upper temperature bound (null for ≥X brackets) |
+| yes_ask | number | YES ask price in cents |
+| yes_bid | number | YES bid price in cents |
+| volume | number | Trading volume |
+
+### SeriesResult
+
+| Field | Type | Description |
+|-------|------|-------------|
+| series | string | Series ticker (e.g., KXHIGHNY) |
+| market_type | 'high' \| 'low' | Temperature market type |
+| bracket_count | number | Number of brackets in series |
+| brackets | BracketMarket[] | All brackets for this series |
+| best_cost | number \| null | Total cost to buy all YES positions |
+| opportunities | WeatherOpportunity[] | Found arbitrage opportunities |
+| near_misses | NearMissRecord[] | Near-miss opportunities |
+| forecast | SeriesForecast \| null | NWS forecast data |
+| error | string \| null | Error message if scan failed |
+
+### CityResult
+
+| Field | Type | Description |
+|-------|------|-------------|
+| code | string | City code (NYC, LAX, etc.) |
+| city | string | City name |
+| high | SeriesResult \| null | HIGH temperature series data |
+| low | SeriesResult \| null | LOW temperature series data |
+
+### WeatherStatus
+
+| Field | Type | Description |
+|-------|------|-------------|
+| running | boolean | Scanner running state |
+| scan_count | number | Total scans performed |
+| last_scan | string \| null | ISO timestamp of last scan |
+| cities | Record<string, CityResult> | All city results by code |
+| opportunities | WeatherOpportunity[] | All found opportunities |
+| near_misses | NearMissRecord[] | All near-miss records |
+| forecasts | Record<string, ForecastData> | NWS forecasts by city code |
+| stats | object | Summary statistics |

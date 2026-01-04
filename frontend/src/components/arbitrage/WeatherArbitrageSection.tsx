@@ -3,6 +3,7 @@ import { api } from '../../services/api';
 import {
   WeatherStatus,
   CityResult,
+  BracketMarket,
   getCostStatus,
   getCostColor,
   getCostBgColor
@@ -20,60 +21,51 @@ const CITY_NAMES: Record<string, string> = {
   PHL: 'Philadelphia'
 };
 
-// Parse temperature from bracket title for sorting and matching
-function parseBracketTemp(title: string): { low: number | null; high: number | null; sortKey: number } {
-  // Match "32-33°" or "32-33°F" (range brackets)
-  const rangeMatch = title.match(/(\d+)\s*[-–]\s*(\d+)°/);
-  if (rangeMatch) {
-    const low = parseInt(rangeMatch[1]);
-    const high = parseInt(rangeMatch[2]);
-    return { low, high, sortKey: low };
+// Generate bracket label from Kalshi's floor_strike and cap_strike fields
+function getBracketLabel(bracket: BracketMarket): string {
+  const floor = bracket.floor_strike;
+  const cap = bracket.cap_strike;
+
+  // Open-ended lower bracket (e.g., ≤49°F)
+  if (floor === null || floor === undefined) {
+    if (cap !== null && cap !== undefined) {
+      return `≤${Math.round(cap)}°F`;
+    }
   }
 
-  // Match ">35°" or ">=35°" (greater than brackets - highest sort key)
-  const gtMatch = title.match(/>\s*=?\s*(\d+)°/);
-  if (gtMatch) {
-    return { low: parseInt(gtMatch[1]), high: null, sortKey: 999 };
+  // Open-ended upper bracket (e.g., ≥83°F)
+  if (cap === null || cap === undefined) {
+    if (floor !== null && floor !== undefined) {
+      return `≥${Math.round(floor)}°F`;
+    }
   }
 
-  // Match "<28°" or "<=28°" (less than brackets - lowest sort key)
-  const ltMatch = title.match(/<\s*=?\s*(\d+)°/);
-  if (ltMatch) {
-    return { low: null, high: parseInt(ltMatch[1]), sortKey: -999 };
+  // Range bracket (e.g., 49-58°F)
+  if (floor !== null && floor !== undefined && cap !== null && cap !== undefined) {
+    return `${Math.round(floor)}-${Math.round(cap)}°F`;
   }
 
-  return { low: null, high: null, sortKey: 0 };
+  // Fallback to title if strikes missing
+  return bracket.title || 'Unknown';
 }
 
-// Sort brackets by temperature (lowest to highest, with < at start and > at end)
-function sortBrackets(brackets: any[]): any[] {
+// Sort brackets by temperature ascending (open-ended lower first, then ranges, then open-ended upper)
+function sortBrackets(brackets: BracketMarket[]): BracketMarket[] {
   return [...brackets].sort((a, b) => {
-    const aTemp = parseBracketTemp(a.title || '');
-    const bTemp = parseBracketTemp(b.title || '');
-    return aTemp.sortKey - bTemp.sortKey;
+    // Open-ended lower brackets (≤X) should come first
+    const aVal = a.floor_strike ?? (a.cap_strike !== null ? -Infinity : Infinity);
+    const bVal = b.floor_strike ?? (b.cap_strike !== null ? -Infinity : Infinity);
+    return aVal - bVal;
   });
 }
 
-// Check if forecast temperature falls within bracket range
-function isForecastInBracket(forecastTemp: number, temps: { low: number | null; high: number | null }): boolean {
-  const { low, high } = temps;
+// Check if forecast temperature falls within this bracket
+function isForecastInBracket(bracket: BracketMarket, forecastTemp: number): boolean {
+  const floor = bracket.floor_strike ?? -Infinity;
+  const cap = bracket.cap_strike ?? Infinity;
 
-  // Range bracket: 32-33°F means temp >= 32 AND temp < 34 (exclusive upper bound)
-  if (low !== null && high !== null) {
-    return forecastTemp >= low && forecastTemp <= high;
-  }
-
-  // Greater than bracket: >=35°F
-  if (low !== null && high === null) {
-    return forecastTemp >= low;
-  }
-
-  // Less than bracket: <=28°F
-  if (low === null && high !== null) {
-    return forecastTemp <= high;
-  }
-
-  return false;
+  // Temperature must be >= floor AND <= cap
+  return forecastTemp >= floor && forecastTemp <= cap;
 }
 
 export default function WeatherArbitrageSection() {
@@ -300,37 +292,19 @@ function BracketTable({
           </thead>
           <tbody>
             {series.brackets && series.brackets.length > 0 ? (
-              sortBrackets(series.brackets).map((bracket: any) => {
-                // Parse temperature range for display and matching
-                const temps = parseBracketTemp(bracket.title || '');
-
-                // Format bracket label
-                const getBracketLabel = (): string => {
-                  if (temps.low !== null && temps.high !== null) {
-                    return `${temps.low}–${temps.high}°F`;
-                  }
-                  if (temps.low !== null && temps.high === null) {
-                    return `≥${temps.low}°F`;
-                  }
-                  if (temps.low === null && temps.high !== null) {
-                    return `≤${temps.high}°F`;
-                  }
-                  // Fallback to ticker suffix
-                  return bracket.ticker?.split('-').pop() || 'Unknown';
-                };
-
-                // Check if forecast falls in this bracket
-                const isForecastBracket = forecastTemp != null && isForecastInBracket(forecastTemp, temps);
+              sortBrackets(series.brackets).map((bracket) => {
+                // Check if forecast falls in this bracket using floor_strike/cap_strike
+                const isForecast = forecastTemp != null && isForecastInBracket(bracket, forecastTemp);
 
                 return (
                   <tr
                     key={bracket.ticker}
                     className={`border-t border-gray-700 transition-colors ${
-                      isForecastBracket ? 'bg-blue-500/30 border-l-4 border-l-blue-400' : ''
+                      isForecast ? 'bg-blue-500/30 border-l-4 border-l-blue-400' : ''
                     }`}
                   >
                     <td className="p-3 font-mono text-sm">
-                      {getBracketLabel()}
+                      {getBracketLabel(bracket)}
                     </td>
                     <td className="p-3 text-right text-green-400 font-medium">
                       {bracket.yes_ask ?? 0}¢
@@ -342,7 +316,7 @@ function BracketTable({
                       {(bracket.volume ?? 0).toLocaleString()}
                     </td>
                     <td className="p-3 text-sm text-blue-400">
-                      {isForecastBracket && `← Forecast: ${forecastTemp}°F`}
+                      {isForecast && `← Forecast: ${forecastTemp}°F`}
                     </td>
                   </tr>
                 );
