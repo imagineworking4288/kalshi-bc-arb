@@ -40,7 +40,9 @@
       "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 8000 | Select-Object OwningProcess\")",
       "Bash(powershell -Command \"Get-Process -Id 21632 | Format-List Name,Id,Path\")",
       "Bash(powershell:*)",
-      "Bash(./backend/venv/Scripts/python.exe -m uvicorn:*)"
+      "Bash(./backend/venv/Scripts/python.exe -m uvicorn:*)",
+      "Bash(ls:*)",
+      "Bash(wc:*)"
     ]
   }
 }

@@ -7,7 +7,7 @@ FastAPI application entry point with lifespan management
 
 | Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
-| lifespan | app: FastAPI | AsyncGenerator | Init database, auto-trader, BTC arbitrage engine, print startup banner, handle shutdown |
+| lifespan | app: FastAPI | AsyncGenerator | Init database, auto-trader, BTC arbitrage engine, strategy orchestrator, print startup banner, handle shutdown |
 | health | - | dict | Health check endpoint, returns status and paper mode |
 
 ### config.py
@@ -62,6 +62,31 @@ HTTP REST API endpoints for opportunities and trading
 | get_raw_btc_markets | - | dict | Diagnostic: Get raw market data from KXBTC and KXBTCD series |
 | get_ticker_patterns | - | dict | Diagnostic: Analyze ticker patterns in BTC markets with format breakdown |
 | get_btc_arb_debug | - | dict | Diagnostic: Detailed BTC arbitrage scanner analysis with settlement matching |
+| get_orchestrator_status | - | dict | Get orchestrator status including all strategies and components |
+| start_orchestrator | - | dict | Start the orchestrator and all enabled strategies |
+| stop_orchestrator | - | dict | Stop the orchestrator and all running strategies |
+| set_orchestrator_auto_trade | enabled: bool | dict | Enable or disable auto-trading |
+| set_orchestrator_mode | mode: str | dict | Set trading mode (paper or live) |
+| enable_strategy | strategy_type: str, enabled: bool | dict | Enable or disable a specific strategy |
+| trigger_manual_scan | strategy_type?: str | dict | Manually trigger a scan for signals |
+| execute_signal | signal_id: str | dict | Manually execute a specific signal |
+| save_orchestrator_config | - | dict | Save current orchestrator config to database |
+| get_signals_v2 | strategy_type?, status?, limit | dict | Get signals from unified signals table |
+| get_signal_stats | days: int = 7 | dict | Get signal statistics |
+| get_performance_metrics | days: int = 30 | dict | Get performance metrics |
+| get_daily_pnl | days: int = 30 | list | Get daily P&L history |
+| get_trade_history | strategy_type?, status?, limit | dict | Get trade history |
+| get_circuit_breaker_status | - | dict | Get circuit breaker status |
+| reset_circuit_breaker | - | dict | Reset the circuit breaker |
+| trip_circuit_breaker | reason: str | dict | Manually trip the circuit breaker |
+| get_risk_status | - | dict | Get risk manager status |
+| sync_risk_positions | - | dict | Sync risk manager positions with Kalshi |
+| get_alerts | limit: int = 20 | dict | Get recent alerts |
+| get_unacknowledged_alerts | limit: int = 50 | dict | Get unacknowledged alerts |
+| acknowledge_alert | alert_id: str | dict | Acknowledge an alert |
+| acknowledge_all_alerts | - | dict | Acknowledge all alerts |
+| get_alert_stats | - | dict | Get alert statistics |
+| run_backtest | request: dict | dict | Run a backtest on historical data |
 
 ### websocket.py
 WebSocket connection manager for real-time updates
@@ -287,6 +312,280 @@ Continuous BTC arbitrage scanning and execution engine
 | BTCArbitrageEngine.manual_execute | opportunity_id | dict | Manually execute specific opportunity |
 | BTCArbitrageEngine._run_loop | - | None | Main scanning loop (every 2 seconds) |
 | BTCArbitrageEngine._auto_execute | opportunity | None | Auto-execute best opportunity with safety controls |
+
+### log_config.py
+Centralized logging configuration with colored output
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| ColoredFormatter | - | LogFormatter | Custom formatter with ANSI color codes for levels |
+| setup_logging | service_name: str | Logger | Setup logger with console, file, and rotating handlers |
+
+### log_viewer.py
+Real-time log viewer with filtering and colored output
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| LogViewer | - | - | Log viewer with keyword filtering and color support |
+| LogViewer.start | - | None | Start the log viewer main loop |
+
+### nws_client.py
+National Weather Service API client for forecast data
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| NWSClient | - | - | Client for NWS point forecast API |
+| NWSClient.get_forecast | lat: float, lon: float | List[Dict] | Get 7-day forecast for coordinates |
+
+### scanner_db.py
+SQLite database for scanner results
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| ScannerDatabase | db_path: Optional[str] | - | Database for scanner results and stats |
+| ScannerDatabase.save_scanner_result | scanner_type: str, result: Dict | None | Save scanner result to database |
+| ScannerDatabase.get_scanner_result | scanner_type: str | Optional[Dict] | Get latest scanner result |
+| ScannerDatabase.get_scanner_stats | scanner_type: str | Dict | Get scanner performance statistics |
+
+### scanner_service.py
+Unified scanner service that runs all scanners
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| ScannerService | - | - | Service running BTC and weather scanners |
+| ScannerService.run_btc_scanner | - | None | Run BTC scanner loop every 2s |
+| ScannerService.run_weather_scanner | - | None | Run weather scanner loop every 30s |
+| ScannerService.start | - | None | Start all scanners concurrently |
+| ScannerService.stop | - | None | Stop all running scanners |
+
+### weather_arb_scanner.py
+Weather arbitrage scanner for 14 market series (7 cities × 2 types)
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| WeatherArbScanner | kalshi_client | - | Scanner for weather market arbitrage opportunities |
+| WeatherArbScanner.scan_once | - | Dict | Scan all 14 weather series for bracket arbitrage |
+| WeatherArbScanner.get_nws_forecast | location_config | Optional[Dict] | Get NWS forecast for location |
+| WeatherArbScanner.analyze_series | series_ticker, forecast_temp | Dict | Analyze single weather series for opportunities |
+
+---
+
+## backend/services/core/
+Unified trading infrastructure module for all strategies
+
+### base_strategy.py
+Abstract base class for trading strategies
+
+| Class/Enum | Values/Fields | Description |
+|------------|---------------|-------------|
+| StrategyType | WEATHER, BTC, ECONOMIC | Enum for strategy classification |
+| SignalType | DIRECTIONAL, ARBITRAGE, SPREAD | Type of trading signal |
+| SignalStatus | PENDING, EXECUTING, EXECUTED, REJECTED, EXPIRED, FAILED | Signal lifecycle status |
+| SignalLeg | ticker, side, action, price_cents, strike?, bounds?, description | Single leg of multi-leg trade |
+| TradingSignal | id, strategy_type, ticker, signal_type, edge_percent, model_prob, market_price, size, confidence, is_arbitrage, legs, status, timestamps | Complete trading signal data |
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| BaseStrategy | - | ABC | Abstract base class for all trading strategies |
+| BaseStrategy.scan | - | List[TradingSignal] | Abstract: Scan for opportunities |
+| BaseStrategy.validate_signal | signal: TradingSignal | bool | Abstract: Validate signal is still tradeable |
+| BaseStrategy.scan_interval_seconds | - | int | Abstract property: seconds between scans |
+| BaseStrategy.get_status | - | dict | Get strategy status |
+| BaseStrategy.run_scan | - | List[TradingSignal] | Run scan with error handling and logging |
+
+### signal_manager.py
+Signal lifecycle management and database storage
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| SignalManager | db | - | Initialize with database connection |
+| SignalManager.create | signal, expires_in=300 | TradingSignal | Store new signal in database |
+| SignalManager.get_pending | strategy_type?, limit=100 | List[TradingSignal] | Get pending signals sorted by edge |
+| SignalManager.get_by_id | signal_id: str | TradingSignal? | Get signal by ID |
+| SignalManager.update_status | signal_id, status, notes?, execution_price? | bool | Update signal status |
+| SignalManager.has_recent | ticker, strategy_type, seconds=300 | bool | Check for duplicate signals |
+| SignalManager.expire_old | - | int | Mark expired signals |
+| SignalManager.get_history | strategy_type?, status?, limit=50 | List[TradingSignal] | Get signal history |
+| SignalManager.get_stats | days=7 | dict | Get signal statistics |
+
+### kelly_sizing.py
+Kelly Criterion position sizing calculator
+
+| Class | Fields | Description |
+|-------|--------|-------------|
+| KellyConfig | fraction=0.25, min_edge_percent=5.0, max_bet_percent=5.0, min/max_contracts | Configuration parameters |
+| KellyResult | contracts, kelly_fraction, edge_percent, bet_percent, reason | Sizing calculation result |
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| KellySizing | config: KellyConfig? | - | Initialize with optional config |
+| KellySizing.calculate | model_prob, market_price_cents, bankroll_cents | KellyResult | Calculate optimal position size |
+| KellySizing.calculate_arbitrage | total_cost_cents, payout_cents, bankroll_cents | int | Size for guaranteed profit |
+| KellySizing.calculate_for_budget | model_prob, market_price_cents, budget_cents | KellyResult | Size within fixed budget |
+| KellySizing.should_trade | model_prob, market_price_cents | tuple[bool, float] | Quick edge check |
+
+### risk_manager.py
+Position limits and loss tracking
+
+| Class | Fields | Description |
+|-------|--------|-------------|
+| RiskLimits | max_position_per_market=100, max_total_position=500, max_daily_loss_cents=5000, max_single_trade_cents=1000 | Limit configuration |
+| RiskCheck | approved: bool, reason: str, adjusted_size: int? | Trade approval result |
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| RiskManager | limits: RiskLimits, db | - | Initialize with limits and database |
+| RiskManager.check_trade | ticker, contracts, price_cents, balance_cents | RiskCheck | Check if trade passes limits |
+| RiskManager.record_trade | ticker, contracts, price_cents | None | Record new position |
+| RiskManager.record_pnl | pnl_cents | None | Record daily P&L |
+| RiskManager.close_position | ticker, contracts | None | Update position on close |
+| RiskManager.get_status | - | dict | Get current risk status |
+| RiskManager.sync_positions | positions: List | None | Sync with Kalshi positions |
+
+### circuit_breaker.py
+Emergency halt on consecutive losses
+
+| Class | Fields | Description |
+|-------|--------|-------------|
+| CBConfig | max_consecutive_losses=5, max_daily_loss_cents=5000, max_hourly_losses=3, cooldown_seconds=300 | Breaker configuration |
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| CircuitBreaker | config: CBConfig? | - | Initialize with optional config |
+| CircuitBreaker.can_trade | - | tuple[bool, str?] | Check if trading allowed |
+| CircuitBreaker.record_result | won: bool, pnl_cents, ticker | None | Record trade outcome |
+| CircuitBreaker.reset | - | None | Reset circuit breaker |
+| CircuitBreaker.force_trip | reason: str | None | Manually trip breaker |
+| CircuitBreaker.daily_reset | - | None | Reset daily counters |
+| CircuitBreaker.get_status | - | dict | Get breaker status |
+
+### batch_executor.py
+Atomic multi-leg order execution
+
+| Enum | Values | Description |
+|------|--------|-------------|
+| OrderSide | YES, NO | Order side |
+| OrderAction | BUY, SELL | Order action |
+| OrderStatus | PENDING, FILLED, PARTIAL, FAILED, CANCELLED | Order status |
+
+| Class | Fields | Description |
+|-------|--------|-------------|
+| OrderLeg | ticker, side, action, contracts, price_cents, status, fill_price, filled_contracts, order_id, error, fee_cents | Single order leg |
+| BatchResult | success, batch_id, legs, total_cost_cents, total_fees_cents, execution_ms, message, mode | Batch execution result |
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| BatchExecutor | kalshi_client, paper_service?, fee_calculator? | - | Initialize with clients |
+| BatchExecutor.execute | legs: List[OrderLeg], mode="paper", atomic=True | BatchResult | Execute batch of orders |
+| BatchExecutor.execute_arbitrage | legs_data: List[Dict], contracts_per_leg, mode | BatchResult | Execute arbitrage trade |
+| BatchExecutor.execute_single | ticker, side, action, contracts, price_cents, mode | BatchResult | Execute single order |
+| BatchExecutor.estimate_cost | legs: List[OrderLeg] | dict | Estimate total cost and fees |
+
+### performance_tracker.py
+P&L tracking and metrics calculation
+
+| Class | Fields | Description |
+|-------|--------|-------------|
+| Metrics | total_trades, winning_trades, losing_trades, win_rate, total_pnl_cents, total_fees_cents, profit_factor, sharpe_ratio, max_drawdown_percent, best_trade_cents, worst_trade_cents, avg_trade_pnl_cents | Performance metrics |
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| PerformanceTracker | db | - | Initialize with database |
+| PerformanceTracker.record_trade | strategy_type, ticker, side, contracts, entry_price, fees_cents | str | Record trade entry, return trade_id |
+| PerformanceTracker.record_exit | trade_id, exit_price | dict | Record trade exit with P&L |
+| PerformanceTracker.record_arbitrage_exit | trade_id, payout_cents | dict | Record arbitrage settlement |
+| PerformanceTracker.get_metrics | days=30 | Metrics | Calculate performance metrics |
+| PerformanceTracker.get_daily_pnl | days=30 | List[dict] | Get daily P&L history |
+| PerformanceTracker.get_strategy_breakdown | days=30 | dict | Get per-strategy metrics |
+| PerformanceTracker.get_trades | strategy_type?, status?, limit=50 | dict | Get trade history |
+
+### alert_service.py
+Real-time alerts via WebSocket
+
+| Enum | Values | Description |
+|------|--------|-------------|
+| AlertType | OPPORTUNITY, TRADE_EXECUTED, TRADE_FAILED, CIRCUIT_BREAKER, RISK_WARNING, ERROR, INFO | Alert type |
+| AlertPriority | LOW, MEDIUM, HIGH, CRITICAL | Alert priority |
+
+| Class | Fields | Description |
+|-------|--------|-------------|
+| Alert | id, type, title, message, priority, timestamp, data, acknowledged | Alert data |
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| AlertService | websocket_manager?, max_history=100 | - | Initialize with optional WS manager |
+| AlertService.send | alert_type, title, message, priority, data? | Alert | Send alert notification |
+| AlertService.opportunity | ticker, edge_percent, strategy, data? | Alert | Send opportunity alert |
+| AlertService.trade_executed | ticker, contracts, price_cents, pnl_cents, mode, data? | Alert | Send trade executed alert |
+| AlertService.trade_failed | ticker, reason, data? | Alert | Send trade failed alert |
+| AlertService.circuit_breaker | tripped: bool, reason, data? | Alert | Send circuit breaker alert |
+| AlertService.risk_warning | warning_type, message, data? | Alert | Send risk warning alert |
+| AlertService.get_recent | limit=20 | List[dict] | Get recent alerts |
+| AlertService.get_unacknowledged | limit=50 | List[dict] | Get unacknowledged alerts |
+| AlertService.acknowledge | alert_id | bool | Acknowledge alert |
+| AlertService.acknowledge_all | - | int | Acknowledge all alerts |
+| AlertService.get_stats | - | dict | Get alert statistics |
+
+### strategy_orchestrator.py
+Main trading engine coordinating all strategies
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| StrategyOrchestrator | db, signals, kelly, risk, circuit, executor, performance, alerts | - | Initialize with all components |
+| StrategyOrchestrator.register | strategy: BaseStrategy | None | Register a trading strategy |
+| StrategyOrchestrator.unregister | strategy_type: StrategyType | bool | Unregister a strategy |
+| StrategyOrchestrator.start | - | None | Start orchestrator and enabled strategies |
+| StrategyOrchestrator.stop | - | None | Stop orchestrator and all tasks |
+| StrategyOrchestrator.enable_strategy | strategy_type, enabled=True | bool | Enable or disable strategy |
+| StrategyOrchestrator.set_auto_trade | enabled: bool | None | Set auto-trade mode |
+| StrategyOrchestrator.set_mode | mode: str | None | Set paper or live mode |
+| StrategyOrchestrator.get_status | - | dict | Get complete orchestrator status |
+| StrategyOrchestrator.manual_scan | strategy_type? | List[dict] | Manually trigger scan |
+| StrategyOrchestrator.manual_execute | signal_id: str | dict | Execute specific signal |
+| StrategyOrchestrator.load_config | - | None | Load config from database |
+| StrategyOrchestrator.save_config | - | None | Save config to database |
+
+### backtest_engine.py
+Historical strategy backtesting engine
+
+| Class | Fields | Description |
+|-------|--------|-------------|
+| BacktestConfig | start_date, end_date, initial_balance_cents=100000, kelly_fraction=0.25, min_edge_percent=5.0, max_position_per_trade=100, slippage_cents=1 | Backtest configuration |
+| BacktestTrade | signal_id, ticker, strategy_type, entry/exit_time, entry/exit_price, contracts, side, is_arbitrage, pnl_cents, fees_cents, status | Simulated trade record |
+| BacktestResult | config, final_balance_cents, total_trades, winning/losing_trades, win_rate, total_pnl_cents, total_fees_cents, max_drawdown_percent, sharpe_ratio, profit_factor, equity_curve, trades, strategy_breakdown, errors | Backtest result |
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| BacktestEngine | db | - | Initialize with database |
+| BacktestEngine.run | strategy: BaseStrategy, config: BacktestConfig | BacktestResult | Run backtest for single strategy |
+| BacktestEngine.run_multiple | strategies: List[BaseStrategy], config | Dict[str, BacktestResult] | Run backtest for multiple strategies |
+
+---
+
+## backend/config/
+
+### fees.py
+Kalshi fee calculation utilities
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| calculate_fees | subtotal: int | int | Calculate Kalshi trading fees in cents |
+
+### locations/base.py
+LocationConfig dataclass with forecast adjustments
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| LocationConfig | - | - | Weather location configuration with forecast adjustments |
+
+### locations/registry.py
+Weather location definitions for 7 major cities
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| get_location | code: str | LocationConfig | Get location config by code |
+| get_all_locations | - | List[LocationConfig] | Get all 7 location configs |
+| get_all_series | - | List[str] | Get all 14 series tickers (7 cities × 2 types) |
 
 ---
 
@@ -604,110 +903,14 @@ Saved markets management with live prices
 
 ---
 
-## Root Diagnostic Scripts
-
-### diagnose_kalshi.py
-Legacy Kalshi API diagnostic script
-
-| Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| test_kalshi_auth | - | bool | Test authentication with old API endpoint |
-
-### diagnose_kalshi_v2.py
-Updated Kalshi API diagnostic with new endpoint
-
-| Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| load_private_key | path: str | RSAPrivateKey | Load PEM private key from file |
-| sign_request_pss | private_key, timestamp, method, path | str | RSA-PSS signature with DIGEST_LENGTH salt |
-| test_kalshi_auth | - | bool | Test auth with new api.elections.kalshi.com endpoint |
-| test_markets | - | bool | Test markets endpoint with authentication |
-| test_btc_markets | - | bool | Search for BTC-related markets in response |
+## Root Scripts
 
 ### start.bat
-Windows batch script launcher
+Windows batch 4-terminal launcher
 
-| Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| - | - | - | Start backend and frontend servers in separate terminals |
-
-### log_config.py
-Centralized logging configuration with colored output
-
-| Class/Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| ColoredFormatter | - | LogFormatter | Custom formatter with ANSI color codes for levels |
-| setup_logging | service_name: str | Logger | Setup logger with console, file, and rotating handlers |
-
-### log_viewer.py
-Real-time log viewer with filtering and colored output
-
-| Class/Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| LogViewer | - | - | Log viewer with keyword filtering and color support |
-| LogViewer.start | - | None | Start the log viewer main loop |
-
-### nws_client.py
-National Weather Service API client for forecast data
-
-| Class/Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| NWSClient | - | - | Client for NWS point forecast API |
-| NWSClient.get_forecast | lat: float, lon: float | List[Dict] | Get 7-day forecast for coordinates |
-
-### scanner_db.py
-SQLite database for scanner results
-
-| Class/Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| ScannerDatabase | db_path: Optional[str] | - | Database for scanner results and stats |
-| ScannerDatabase.save_scanner_result | scanner_type: str, result: Dict | None | Save scanner result to database |
-| ScannerDatabase.get_scanner_result | scanner_type: str | Optional[Dict] | Get latest scanner result |
-| ScannerDatabase.get_scanner_stats | scanner_type: str | Dict | Get scanner performance statistics |
-
-### scanner_service.py
-Unified scanner service that runs all scanners
-
-| Class/Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| ScannerService | - | - | Service running BTC and weather scanners |
-| ScannerService.run_btc_scanner | - | None | Run BTC scanner loop every 2s |
-| ScannerService.run_weather_scanner | - | None | Run weather scanner loop every 30s |
-| ScannerService.start | - | None | Start all scanners concurrently |
-| ScannerService.stop | - | None | Stop all running scanners |
-
-### weather_arb_scanner.py
-Weather arbitrage scanner for 14 market series (7 cities × 2 types)
-
-| Class/Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| WeatherArbScanner | kalshi_client | - | Scanner for weather market arbitrage opportunities |
-| WeatherArbScanner.scan_once | - | Dict | Scan all 14 weather series for bracket arbitrage |
-| WeatherArbScanner.get_nws_forecast | location_config | Optional[Dict] | Get NWS forecast for location |
-| WeatherArbScanner.analyze_series | series_ticker, forecast_temp | Dict | Analyze single weather series for opportunities |
-
-### fees.py
-Kalshi fee calculation utilities
-
-| Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| calculate_fees | subtotal: int | int | Calculate Kalshi trading fees in cents |
-
-### locations/base.py
-LocationConfig dataclass with forecast adjustments
-
-| Class/Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| LocationConfig | - | - | Weather location configuration with forecast adjustments |
-
-### locations/registry.py
-Weather location definitions for 7 major cities
-
-| Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| get_location | code: str | LocationConfig | Get location config by code |
-| get_all_locations | - | List[LocationConfig] | Get all 7 location configs |
-| get_all_series | - | List[str] | Get all 14 series tickers (7 cities × 2 types) |
+| Description |
+|-------------|
+| Launch frontend, backend, scanners, and log viewer in Windows Terminal tabs |
 
 ---
 

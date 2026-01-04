@@ -964,3 +964,410 @@ async def get_log_files():
             "modified": datetime.fromtimestamp(stat.st_mtime).isoformat()
         })
     return {"files": files}
+
+
+# ===========================================
+# ORCHESTRATOR (Unified Trading Engine)
+# ===========================================
+
+# Orchestrator instance (initialized on startup in main.py lifespan)
+orchestrator_instance = None
+
+
+def get_orchestrator():
+    """Get the orchestrator instance."""
+    global orchestrator_instance
+    return orchestrator_instance
+
+
+def set_orchestrator(instance):
+    """Set the orchestrator instance (called from main.py lifespan)."""
+    global orchestrator_instance
+    orchestrator_instance = instance
+
+
+@router.get("/orchestrator/status")
+async def get_orchestrator_status():
+    """Get orchestrator status including all strategies and components."""
+    orch = get_orchestrator()
+    if not orch:
+        return {"is_running": False, "error": "Orchestrator not initialized"}
+    return orch.get_status()
+
+
+@router.post("/orchestrator/start")
+async def start_orchestrator():
+    """Start the orchestrator and all enabled strategies."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    await orch.start()
+    return {"success": True, "status": orch.get_status()}
+
+
+@router.post("/orchestrator/stop")
+async def stop_orchestrator():
+    """Stop the orchestrator and all running strategies."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    await orch.stop()
+    return {"success": True, "status": orch.get_status()}
+
+
+@router.post("/orchestrator/auto-trade")
+async def set_orchestrator_auto_trade(enabled: bool = True):
+    """Enable or disable auto-trading."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    orch.set_auto_trade(enabled)
+    return {"success": True, "auto_trade_enabled": enabled}
+
+
+@router.post("/orchestrator/mode")
+async def set_orchestrator_mode(mode: str = "paper"):
+    """Set trading mode (paper or live)."""
+    if mode not in ("paper", "live"):
+        raise HTTPException(400, "Mode must be 'paper' or 'live'")
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    orch.set_mode(mode)
+    return {"success": True, "mode": mode}
+
+
+@router.post("/orchestrator/strategy/{strategy_type}/enable")
+async def enable_strategy(strategy_type: str, enabled: bool = True):
+    """Enable or disable a specific strategy."""
+    from ..services.core import StrategyType
+    try:
+        st = StrategyType(strategy_type)
+    except ValueError:
+        raise HTTPException(400, f"Unknown strategy type: {strategy_type}")
+
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+
+    success = orch.enable_strategy(st, enabled)
+    if not success:
+        raise HTTPException(404, f"Strategy {strategy_type} not registered")
+    return {"success": True, "strategy": strategy_type, "enabled": enabled}
+
+
+@router.post("/orchestrator/scan")
+async def trigger_manual_scan(strategy_type: Optional[str] = None):
+    """Manually trigger a scan for signals."""
+    from ..services.core import StrategyType
+
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+
+    st = None
+    if strategy_type:
+        try:
+            st = StrategyType(strategy_type)
+        except ValueError:
+            raise HTTPException(400, f"Unknown strategy type: {strategy_type}")
+
+    signals = await orch.manual_scan(st)
+    return {"signals": signals, "count": len(signals)}
+
+
+@router.post("/orchestrator/execute/{signal_id}")
+async def execute_signal(signal_id: str):
+    """Manually execute a specific signal."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+
+    result = await orch.manual_execute(signal_id)
+    return result
+
+
+@router.post("/orchestrator/config")
+async def save_orchestrator_config():
+    """Save current orchestrator configuration to database."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    await orch.save_config()
+    return {"success": True}
+
+
+# ===========================================
+# SIGNALS V2 (Unified Signal Management)
+# ===========================================
+
+@router.get("/signals")
+async def get_signals_v2(
+    strategy_type: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 50
+):
+    """Get signals from the unified signals table."""
+    from ..services.core import StrategyType, SignalStatus
+
+    orch = get_orchestrator()
+    if not orch:
+        # Fallback to direct DB query
+        query = "SELECT * FROM signals_v2 WHERE 1=1"
+        params = []
+
+        if strategy_type:
+            query += " AND strategy_type = ?"
+            params.append(strategy_type)
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+
+        async with db.connection() as conn:
+            cursor = await conn.execute(query, params)
+            rows = await cursor.fetchall()
+            columns = [d[0] for d in cursor.description]
+            return {"signals": [dict(zip(columns, row)) for row in rows]}
+
+    # Use signal manager
+    st = None
+    if strategy_type:
+        try:
+            st = StrategyType(strategy_type)
+        except ValueError:
+            pass
+
+    ss = None
+    if status:
+        try:
+            ss = SignalStatus(status)
+        except ValueError:
+            pass
+
+    signals = await orch.signals.get_history(st, ss, limit)
+    return {"signals": [s.to_dict() for s in signals]}
+
+
+@router.get("/signals/stats")
+async def get_signal_stats(days: int = 7):
+    """Get signal statistics."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    return await orch.signals.get_stats(days)
+
+
+# ===========================================
+# PERFORMANCE TRACKING
+# ===========================================
+
+@router.get("/performance/metrics")
+async def get_performance_metrics(days: int = 30):
+    """Get performance metrics."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    metrics = await orch.performance.get_metrics(days)
+    return metrics.to_dict()
+
+
+@router.get("/performance/daily")
+async def get_daily_pnl(days: int = 30):
+    """Get daily P&L history."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    return await orch.performance.get_daily_pnl(days)
+
+
+@router.get("/performance/trades")
+async def get_trade_history(
+    strategy_type: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 50
+):
+    """Get trade history."""
+    orch = get_orchestrator()
+    if not orch:
+        # Direct DB query fallback
+        query = "SELECT * FROM trade_records WHERE 1=1"
+        params = []
+
+        if strategy_type:
+            query += " AND strategy_type = ?"
+            params.append(strategy_type)
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+
+        query += " ORDER BY entry_time DESC LIMIT ?"
+        params.append(limit)
+
+        async with db.connection() as conn:
+            cursor = await conn.execute(query, params)
+            rows = await cursor.fetchall()
+            columns = [d[0] for d in cursor.description]
+            return {"trades": [dict(zip(columns, row)) for row in rows]}
+
+    return await orch.performance.get_trades(strategy_type, status, limit)
+
+
+# ===========================================
+# CIRCUIT BREAKER
+# ===========================================
+
+@router.get("/circuit-breaker/status")
+async def get_circuit_breaker_status():
+    """Get circuit breaker status."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    return orch.circuit.get_status()
+
+
+@router.post("/circuit-breaker/reset")
+async def reset_circuit_breaker():
+    """Reset the circuit breaker."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    await orch.circuit.reset()
+    return {"success": True, "status": orch.circuit.get_status()}
+
+
+@router.post("/circuit-breaker/trip")
+async def trip_circuit_breaker(reason: str = "Manual trip"):
+    """Manually trip the circuit breaker."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    await orch.circuit.force_trip(reason)
+    return {"success": True, "status": orch.circuit.get_status()}
+
+
+# ===========================================
+# RISK MANAGER
+# ===========================================
+
+@router.get("/risk/status")
+async def get_risk_status():
+    """Get risk manager status."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    return orch.risk.get_status()
+
+
+@router.post("/risk/sync")
+async def sync_risk_positions():
+    """Sync risk manager positions with Kalshi."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    # Get live positions from executor
+    positions = await kalshi.get_portfolio_positions()
+    await orch.risk.sync_positions(positions)
+    return {"success": True, "status": orch.risk.get_status()}
+
+
+# ===========================================
+# ALERTS
+# ===========================================
+
+@router.get("/alerts")
+async def get_alerts(limit: int = 20):
+    """Get recent alerts."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    return {"alerts": orch.alerts.get_recent(limit)}
+
+
+@router.get("/alerts/unacknowledged")
+async def get_unacknowledged_alerts(limit: int = 50):
+    """Get unacknowledged alerts."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    return {"alerts": orch.alerts.get_unacknowledged(limit)}
+
+
+@router.post("/alerts/{alert_id}/acknowledge")
+async def acknowledge_alert(alert_id: str):
+    """Acknowledge an alert."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    success = orch.alerts.acknowledge(alert_id)
+    if not success:
+        raise HTTPException(404, f"Alert {alert_id} not found")
+    return {"success": True}
+
+
+@router.post("/alerts/acknowledge-all")
+async def acknowledge_all_alerts():
+    """Acknowledge all alerts."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    count = orch.alerts.acknowledge_all()
+    return {"success": True, "acknowledged": count}
+
+
+@router.get("/alerts/stats")
+async def get_alert_stats():
+    """Get alert statistics."""
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+    return orch.alerts.get_stats()
+
+
+# ===========================================
+# BACKTESTING
+# ===========================================
+
+@router.post("/backtest/run")
+async def run_backtest(request: Request):
+    """Run a backtest on historical data."""
+    from ..services.core import BacktestConfig, BacktestEngine
+    from datetime import datetime
+
+    data = await request.json()
+
+    # Parse config
+    config = BacktestConfig(
+        start_date=datetime.fromisoformat(data.get("start_date")),
+        end_date=datetime.fromisoformat(data.get("end_date")),
+        initial_balance_cents=data.get("initial_balance_cents", 100000),
+        kelly_fraction=data.get("kelly_fraction", 0.25),
+        min_edge_percent=data.get("min_edge_percent", 5.0),
+        max_position_per_trade=data.get("max_position_per_trade", 100)
+    )
+
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+
+    engine = BacktestEngine(db)
+
+    # Get strategy if specified
+    strategy_type = data.get("strategy_type")
+    if strategy_type:
+        from ..services.core import StrategyType
+        try:
+            st = StrategyType(strategy_type)
+            strategy = orch._strategies.get(st)
+            if not strategy:
+                raise HTTPException(404, f"Strategy {strategy_type} not registered")
+            result = await engine.run(strategy, config)
+            return result.to_dict()
+        except ValueError:
+            raise HTTPException(400, f"Unknown strategy type: {strategy_type}")
+    else:
+        # Run all strategies
+        results = await engine.run_multiple(list(orch._strategies.values()), config)
+        return {st: r.to_dict() for st, r in results.items()}

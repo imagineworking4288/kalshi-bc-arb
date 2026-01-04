@@ -194,3 +194,157 @@ CREATE TABLE IF NOT EXISTS btc_arb_config (
 );
 
 INSERT OR IGNORE INTO btc_arb_config (id) VALUES (1);
+
+-- ===========================================
+-- CORE TRADING INFRASTRUCTURE TABLES
+-- ===========================================
+
+-- Unified signals table (v2) for all strategies
+CREATE TABLE IF NOT EXISTS signals_v2 (
+    id TEXT PRIMARY KEY,
+    strategy_type TEXT NOT NULL,  -- 'weather', 'btc', 'economic'
+    ticker TEXT NOT NULL,
+    signal_type TEXT NOT NULL,  -- 'directional', 'arbitrage', 'spread'
+    edge_percent REAL NOT NULL,
+    model_prob REAL NOT NULL,
+    market_price INTEGER NOT NULL,
+    recommended_size INTEGER NOT NULL,
+    confidence REAL DEFAULT 1.0,
+    is_arbitrage INTEGER DEFAULT 0,
+    legs_json TEXT,  -- JSON array of leg objects
+    metadata_json TEXT,  -- Additional strategy-specific data
+    status TEXT DEFAULT 'pending',  -- 'pending', 'executing', 'executed', 'rejected', 'expired', 'failed'
+    created_at TIMESTAMP NOT NULL,
+    expires_at TIMESTAMP,
+    executed_at TIMESTAMP,
+    execution_price INTEGER,
+    notes TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_signals_v2_status ON signals_v2(status);
+CREATE INDEX IF NOT EXISTS idx_signals_v2_strategy ON signals_v2(strategy_type);
+CREATE INDEX IF NOT EXISTS idx_signals_v2_ticker ON signals_v2(ticker);
+CREATE INDEX IF NOT EXISTS idx_signals_v2_created ON signals_v2(created_at);
+CREATE INDEX IF NOT EXISTS idx_signals_v2_expires ON signals_v2(expires_at);
+
+-- Trade records for performance tracking
+CREATE TABLE IF NOT EXISTS trade_records (
+    id TEXT PRIMARY KEY,
+    strategy_type TEXT NOT NULL,
+    ticker TEXT NOT NULL,
+    side TEXT NOT NULL,  -- 'yes' or 'no'
+    contracts INTEGER NOT NULL,
+    entry_price INTEGER NOT NULL,
+    entry_time TIMESTAMP NOT NULL,
+    exit_price INTEGER,
+    exit_time TIMESTAMP,
+    fees_cents INTEGER DEFAULT 0,
+    pnl_cents INTEGER,
+    status TEXT DEFAULT 'open',  -- 'open', 'closed', 'settled'
+    is_arbitrage INTEGER DEFAULT 0,
+    batch_id TEXT,
+    signal_id TEXT,
+    notes TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_trades_strategy ON trade_records(strategy_type);
+CREATE INDEX IF NOT EXISTS idx_trades_status_v2 ON trade_records(status);
+CREATE INDEX IF NOT EXISTS idx_trades_entry_time ON trade_records(entry_time);
+CREATE INDEX IF NOT EXISTS idx_trades_batch ON trade_records(batch_id);
+
+-- Orchestrator configuration (single row)
+CREATE TABLE IF NOT EXISTS orchestrator_config (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    auto_trade_enabled INTEGER DEFAULT 0,
+    mode TEXT DEFAULT 'paper',  -- 'paper' or 'live'
+    kelly_fraction REAL DEFAULT 0.25,
+    min_edge_percent REAL DEFAULT 5.0,
+    max_position_per_market INTEGER DEFAULT 100,
+    max_daily_loss_cents INTEGER DEFAULT 5000,
+    cb_max_consecutive_losses INTEGER DEFAULT 5,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT OR IGNORE INTO orchestrator_config (id) VALUES (1);
+
+-- Circuit breaker state
+CREATE TABLE IF NOT EXISTS circuit_breaker_state (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    is_tripped INTEGER DEFAULT 0,
+    trip_reason TEXT,
+    tripped_at TIMESTAMP,
+    consecutive_losses INTEGER DEFAULT 0,
+    daily_loss_cents INTEGER DEFAULT 0,
+    hourly_losses INTEGER DEFAULT 0,
+    last_reset TIMESTAMP,
+    last_trade_time TIMESTAMP
+);
+
+INSERT OR IGNORE INTO circuit_breaker_state (id, is_tripped, consecutive_losses, daily_loss_cents, hourly_losses)
+VALUES (1, 0, 0, 0, 0);
+
+-- Risk manager positions (live tracking)
+CREATE TABLE IF NOT EXISTS risk_positions (
+    ticker TEXT PRIMARY KEY,
+    contracts INTEGER NOT NULL,
+    avg_price INTEGER NOT NULL,
+    side TEXT NOT NULL,
+    opened_at TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_risk_positions_updated ON risk_positions(updated_at);
+
+-- Daily P&L tracking for risk management (enhanced)
+CREATE TABLE IF NOT EXISTS daily_pnl_v2 (
+    date TEXT PRIMARY KEY,  -- YYYY-MM-DD
+    realized_pnl_cents INTEGER DEFAULT 0,
+    unrealized_pnl_cents INTEGER DEFAULT 0,
+    total_trades INTEGER DEFAULT 0,
+    winning_trades INTEGER DEFAULT 0,
+    losing_trades INTEGER DEFAULT 0,
+    total_fees_cents INTEGER DEFAULT 0,
+    max_drawdown_cents INTEGER DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_pnl_v2_date ON daily_pnl_v2(date);
+
+-- Historical opportunities for backtesting
+CREATE TABLE IF NOT EXISTS historical_opportunities (
+    id TEXT PRIMARY KEY,
+    strategy_type TEXT NOT NULL,
+    ticker TEXT NOT NULL,
+    signal_type TEXT NOT NULL,
+    edge_percent REAL NOT NULL,
+    model_prob REAL NOT NULL,
+    market_price INTEGER NOT NULL,
+    recommended_size INTEGER DEFAULT 10,
+    is_arbitrage INTEGER DEFAULT 0,
+    timestamp TIMESTAMP NOT NULL,
+    resolution_time TIMESTAMP,
+    outcome TEXT,  -- 'won', 'lost', 'expired'
+    won INTEGER,
+    metadata_json TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_hist_opp_strategy ON historical_opportunities(strategy_type);
+CREATE INDEX IF NOT EXISTS idx_hist_opp_timestamp ON historical_opportunities(timestamp);
+CREATE INDEX IF NOT EXISTS idx_hist_opp_outcome ON historical_opportunities(outcome);
+
+-- Alert history
+CREATE TABLE IF NOT EXISTS alert_history (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    priority TEXT NOT NULL,
+    data_json TEXT,
+    created_at TIMESTAMP NOT NULL,
+    acknowledged INTEGER DEFAULT 0,
+    acknowledged_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_alerts_created ON alert_history(created_at);
+CREATE INDEX IF NOT EXISTS idx_alerts_type ON alert_history(type);
+CREATE INDEX IF NOT EXISTS idx_alerts_ack ON alert_history(acknowledged);

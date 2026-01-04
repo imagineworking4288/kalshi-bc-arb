@@ -45,6 +45,54 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[STARTUP] BTC Arbitrage Engine failed to start: {e}")
 
+    # Initialize Strategy Orchestrator (unified trading engine)
+    try:
+        from .api.websocket import manager as ws_manager
+        from .services.core import (
+            StrategyOrchestrator,
+            SignalManager,
+            KellySizing, KellyConfig,
+            RiskManager, RiskLimits,
+            CircuitBreaker, CBConfig,
+            BatchExecutor,
+            PerformanceTracker,
+            AlertService
+        )
+
+        # Initialize core components
+        signals = SignalManager(db)
+        kelly = KellySizing(KellyConfig())
+        risk = RiskManager(RiskLimits(), db)
+        circuit = CircuitBreaker(CBConfig())
+        executor = BatchExecutor(kalshi_client)
+        performance = PerformanceTracker(db)
+        alerts = AlertService(ws_manager)
+
+        # Create orchestrator
+        orchestrator = StrategyOrchestrator(
+            db=db,
+            signals=signals,
+            kelly=kelly,
+            risk=risk,
+            circuit=circuit,
+            executor=executor,
+            performance=performance,
+            alerts=alerts
+        )
+
+        # Load saved config
+        await orchestrator.load_config()
+
+        # Register with routes
+        routes.set_orchestrator(orchestrator)
+
+        print("[STARTUP] Strategy Orchestrator initialized")
+        print("=" * 50)
+    except Exception as e:
+        print(f"[STARTUP] Strategy Orchestrator failed to initialize: {e}")
+        import traceback
+        traceback.print_exc()
+
     yield
 
     # Shutdown
@@ -58,6 +106,15 @@ async def lifespan(app: FastAPI):
         print("[SHUTDOWN] BTC Arbitrage Engine stopped")
     except Exception as e:
         print(f"[SHUTDOWN] Error stopping BTC arbitrage engine: {e}")
+
+    # Shutdown Strategy Orchestrator
+    try:
+        orchestrator = routes.get_orchestrator()
+        if orchestrator and orchestrator._is_running:
+            await orchestrator.stop()
+            print("[SHUTDOWN] Strategy Orchestrator stopped")
+    except Exception as e:
+        print(f"[SHUTDOWN] Error stopping Strategy Orchestrator: {e}")
 
     print("Shutting down...")
 

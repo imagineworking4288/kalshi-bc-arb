@@ -37,6 +37,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/database | backend/database/ | SQLite connection and schema |
 | backend/models | backend/models/ | Pydantic request/response schemas |
 | backend/services | backend/services/ | Core business logic and external integrations |
+| backend/services/core | backend/services/core/ | Unified trading infrastructure (orchestrator, signals, risk, etc.) |
 | backend/utils | backend/utils/ | Kalshi RSA-PSS authentication |
 | backend/config | backend/config/ | Settings and location configurations |
 | frontend/components/analytics | frontend/src/components/analytics/ | P&L analytics display |
@@ -76,7 +77,6 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | ARCHITECTURE.md | 4-terminal architecture documentation |
 | QUICKSTART.md | First time setup guide |
 | docker-compose.yml | Docker container configuration |
-| MVP_IMPLEMENTATION.md | Implementation guide and roadmap |
 | .claude/settings.local.json | Claude configuration settings |
 | backend/main.py | FastAPI app entry point |
 | backend/config.py | Legacy settings (replaced by config module) |
@@ -85,8 +85,6 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/config/locations/__init__.py | Location module exports |
 | backend/config/locations/base.py | LocationConfig dataclass with forecast adjustments |
 | backend/config/locations/registry.py | Weather location definitions (7 cities) |
-| diagnose_kalshi.py | Legacy Kalshi API test script |
-| diagnose_kalshi_v2.py | Updated API diagnostic with auth tests |
 | start.bat | Windows batch 4-terminal launcher script |
 | stop.bat | Stop all Kalshi platform services |
 | run_scanners.py | Scanner service entry point |
@@ -119,6 +117,17 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/services/scanner_db.py | SQLite database for scanner results |
 | backend/services/scanner_service.py | Unified scanner service runner |
 | backend/services/weather_arb_scanner.py | Weather arbitrage scanner for 14 series |
+| backend/services/core/__init__.py | Core module exports all trading infrastructure |
+| backend/services/core/base_strategy.py | BaseStrategy ABC and TradingSignal dataclass |
+| backend/services/core/signal_manager.py | Signal lifecycle management and database storage |
+| backend/services/core/kelly_sizing.py | Kelly Criterion position sizing calculator |
+| backend/services/core/risk_manager.py | Position limits and loss tracking |
+| backend/services/core/circuit_breaker.py | Emergency halt on consecutive losses |
+| backend/services/core/batch_executor.py | Atomic multi-leg order execution |
+| backend/services/core/performance_tracker.py | P&L tracking and metrics calculation |
+| backend/services/core/alert_service.py | Real-time alerts via WebSocket |
+| backend/services/core/strategy_orchestrator.py | Main trading engine coordinating all strategies |
+| backend/services/core/backtest_engine.py | Historical strategy backtesting engine |
 | backend/utils/__init__.py | Utils module exports |
 | backend/utils/kalshi_auth.py | RSA-PSS signature authentication |
 | backend/utils/logger.py | Logging system with activity buffer |
