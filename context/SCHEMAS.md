@@ -625,7 +625,39 @@
 | cap_strike | number \| null | Upper temperature bound (null for ≥X brackets) |
 | yes_ask | number | YES ask price in cents |
 | yes_bid | number | YES bid price in cents |
+| no_ask | number | NO ask price in cents |
+| no_bid | number | NO bid price in cents |
 | volume | number | Trading volume |
+
+### BracketTotals
+
+| Field | Type | Description |
+|-------|------|-------------|
+| yes_ask | number | Sum of all YES ask prices in series |
+| yes_bid | number | Sum of all YES bid prices in series |
+| no_ask | number | Sum of all NO ask prices in series |
+| no_bid | number | Sum of all NO bid prices in series |
+| volume | number | Sum of all volumes in series |
+
+### ArbitrageStrategy
+
+| Field | Type | Description |
+|-------|------|-------------|
+| cost | number | Total cost to execute strategy in cents |
+| payout | number | Guaranteed payout amount in cents |
+| profit | number | Net profit (payout - cost) in cents |
+| is_arb | boolean | Whether strategy is profitable (cost < payout) |
+| brackets | Array<{title: string, no_ask: number}> \| undefined | Bracket details for min_2_no strategy |
+
+### ArbitrageAnalysis
+
+| Field | Type | Description |
+|-------|------|-------------|
+| all_yes | ArbitrageStrategy | Buy YES on every bracket (arb if sum < 100¢) |
+| all_no | ArbitrageStrategy | Buy NO on every bracket (arb if sum < (n-1)*100¢) |
+| min_2_no | ArbitrageStrategy | Buy 2 cheapest NOs (arb if sum < 100¢) |
+| best_strategy | string \| null | Name of best strategy ('all_yes', 'all_no', 'min_2_no') |
+| has_arbitrage | boolean | Whether any strategy is profitable |
 
 ### SeriesResult
 
@@ -636,6 +668,8 @@
 | bracket_count | number | Number of brackets in series |
 | brackets | BracketMarket[] | All brackets for this series |
 | best_cost | number \| null | Total cost to buy all YES positions |
+| totals | BracketTotals \| null | Sums of all ask/bid prices and volume |
+| arbitrage | ArbitrageAnalysis \| null | Three-strategy arbitrage analysis |
 | opportunities | WeatherOpportunity[] | Found arbitrage opportunities |
 | near_misses | NearMissRecord[] | Near-miss opportunities |
 | forecast | SeriesForecast \| null | NWS forecast data |

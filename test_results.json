@@ -1,0 +1,664 @@
+{
+  "test_run_timestamp": "2026-01-04T23:58:10.475300Z",
+  "overall_status": "PASS",
+  "summary": {
+    "total_tests": 11,
+    "passed": 11,
+    "failed": 0,
+    "warnings": 0
+  },
+  "components": {
+    "base_strategy": {
+      "status": "PASS",
+      "import_test": {
+        "success": true,
+        "error": null
+      },
+      "instantiation_test": {
+        "success": true,
+        "error": null
+      },
+      "method_tests": [
+        {
+          "method": "StrategyType enum values",
+          "success": true,
+          "result": "All enum values correct",
+          "error": null
+        },
+        {
+          "method": "SignalType enum values",
+          "success": true,
+          "result": "SignalType has required values",
+          "error": null
+        },
+        {
+          "method": "SignalStatus enum values",
+          "success": true,
+          "result": "SignalStatus has required values",
+          "error": null
+        },
+        {
+          "method": "TradingSignal creation",
+          "success": true,
+          "result": "Created signal with id=71eb7c54...",
+          "error": null
+        },
+        {
+          "method": "TradingSignal default values",
+          "success": true,
+          "result": "All defaults correct",
+          "error": null
+        },
+        {
+          "method": "TradingSignal.to_dict()",
+          "success": true,
+          "result": "Serialization works",
+          "error": null
+        },
+        {
+          "method": "BaseStrategy abstract check",
+          "success": true,
+          "result": "Correctly raises TypeError for abstract class",
+          "error": null
+        }
+      ],
+      "potential_fixes": []
+    },
+    "signal_manager": {
+      "status": "PASS",
+      "import_test": {
+        "success": true,
+        "error": null
+      },
+      "instantiation_test": {
+        "success": true,
+        "error": null
+      },
+      "method_tests": [
+        {
+          "method": "create()",
+          "success": true,
+          "result": "Created signal 8a974c78...",
+          "error": null
+        },
+        {
+          "method": "get_pending()",
+          "success": true,
+          "result": "Found 1 pending signals",
+          "error": null
+        },
+        {
+          "method": "get_by_id()",
+          "success": true,
+          "result": "Method executed successfully",
+          "error": null
+        },
+        {
+          "method": "has_recent()",
+          "success": true,
+          "result": "Duplicate check returned: True",
+          "error": null
+        },
+        {
+          "method": "update_status()",
+          "success": true,
+          "result": "Status update returned: True",
+          "error": null
+        },
+        {
+          "method": "expire_old()",
+          "success": true,
+          "result": "Expired 0 signals",
+          "error": null
+        },
+        {
+          "method": "get_history()",
+          "success": true,
+          "result": "Got 2 history records",
+          "error": null
+        },
+        {
+          "method": "get_stats()",
+          "success": true,
+          "result": "Stats: ['period_days', 'status_counts', 'strategy_counts', 'avg_executed_edge', 'total_signals']",
+          "error": null
+        }
+      ],
+      "potential_fixes": []
+    },
+    "kelly_sizing": {
+      "status": "PASS",
+      "import_test": {
+        "success": true,
+        "error": null
+      },
+      "instantiation_test": {
+        "success": true,
+        "error": null
+      },
+      "method_tests": [
+        {
+          "method": "KellyConfig defaults",
+          "success": true,
+          "result": "fraction=0.25, min_edge=5.0",
+          "error": null
+        },
+        {
+          "method": "calculate() with edge",
+          "success": true,
+          "result": "edge=14.999999999999996%, contracts=100, reason=Kelly=0.27 adj=0.050 -> 100 contracts",
+          "error": null
+        },
+        {
+          "method": "calculate() no edge",
+          "success": true,
+          "result": "edge=0.0%, contracts=0",
+          "error": null
+        },
+        {
+          "method": "calculate() negative edge",
+          "success": true,
+          "result": "Correctly returns 0 contracts for negative edge",
+          "error": null
+        },
+        {
+          "method": "calculate_arbitrage()",
+          "success": true,
+          "result": "contracts=100",
+          "error": null
+        },
+        {
+          "method": "calculate_for_budget()",
+          "success": true,
+          "result": "contracts=100 within $50 budget",
+          "error": null
+        },
+        {
+          "method": "should_trade()",
+          "success": true,
+          "result": "should=True, edge=19.999999999999996%",
+          "error": null
+        }
+      ],
+      "potential_fixes": []
+    },
+    "risk_manager": {
+      "status": "PASS",
+      "import_test": {
+        "success": true,
+        "error": null
+      },
+      "instantiation_test": {
+        "success": true,
+        "error": null
+      },
+      "method_tests": [
+        {
+          "method": "RiskLimits defaults",
+          "success": true,
+          "result": "max_position=100, max_daily_loss=5000",
+          "error": null
+        },
+        {
+          "method": "check_trade() valid",
+          "success": true,
+          "result": "approved=True, reason=All risk checks passed",
+          "error": null
+        },
+        {
+          "method": "check_trade() over limit",
+          "success": true,
+          "result": "Adjusted size to 20",
+          "error": null
+        },
+        {
+          "method": "record_trade()",
+          "success": true,
+          "result": "Position recorded",
+          "error": null
+        },
+        {
+          "method": "record_pnl()",
+          "success": true,
+          "result": "P&L recorded",
+          "error": null
+        },
+        {
+          "method": "close_position()",
+          "success": true,
+          "result": "Position partially closed",
+          "error": null
+        },
+        {
+          "method": "get_status()",
+          "success": true,
+          "result": "Status keys: ['limits', 'current', 'positions', 'daily_loss_remaining_cents']",
+          "error": null
+        }
+      ],
+      "potential_fixes": []
+    },
+    "circuit_breaker": {
+      "status": "PASS",
+      "import_test": {
+        "success": true,
+        "error": null
+      },
+      "instantiation_test": {
+        "success": true,
+        "error": null
+      },
+      "method_tests": [
+        {
+          "method": "CBConfig defaults",
+          "success": true,
+          "result": "max_losses=5, max_daily=5000",
+          "error": null
+        },
+        {
+          "method": "can_trade() initial",
+          "success": true,
+          "result": "Can trade initially",
+          "error": null
+        },
+        {
+          "method": "record_result() win",
+          "success": true,
+          "result": "Win recorded",
+          "error": null
+        },
+        {
+          "method": "record_result() trips",
+          "success": true,
+          "result": "After 3 losses: can_trade=False, reason=Circuit breaker tripped: Consecutive losses: 3 (limit: 3)",
+          "error": null
+        },
+        {
+          "method": "get_status()",
+          "success": true,
+          "result": "is_tripped=True",
+          "error": null
+        },
+        {
+          "method": "reset()",
+          "success": true,
+          "result": "Reset allows trading again",
+          "error": null
+        },
+        {
+          "method": "force_trip()",
+          "success": true,
+          "result": "Force tripped: Circuit breaker tripped: Manual test trip",
+          "error": null
+        },
+        {
+          "method": "daily_reset()",
+          "success": true,
+          "result": "Daily reset executed",
+          "error": null
+        }
+      ],
+      "potential_fixes": []
+    },
+    "batch_executor": {
+      "status": "PASS",
+      "import_test": {
+        "success": true,
+        "error": null
+      },
+      "instantiation_test": {
+        "success": true,
+        "error": null
+      },
+      "method_tests": [
+        {
+          "method": "OrderSide/OrderAction enums",
+          "success": true,
+          "result": "Enum values correct",
+          "error": null
+        },
+        {
+          "method": "OrderLeg creation",
+          "success": true,
+          "result": "Created leg for TEST-001",
+          "error": null
+        },
+        {
+          "method": "estimate_cost()",
+          "success": true,
+          "result": "total=392\u00a2",
+          "error": null
+        },
+        {
+          "method": "execute() paper mode",
+          "success": true,
+          "result": "success=True, cost=150",
+          "error": null
+        },
+        {
+          "method": "execute_single()",
+          "success": true,
+          "result": "success=True",
+          "error": null
+        },
+        {
+          "method": "execute_arbitrage()",
+          "success": true,
+          "result": "success=True, legs=3",
+          "error": null
+        }
+      ],
+      "potential_fixes": []
+    },
+    "performance_tracker": {
+      "status": "PASS",
+      "import_test": {
+        "success": true,
+        "error": null
+      },
+      "instantiation_test": {
+        "success": true,
+        "error": null
+      },
+      "method_tests": [
+        {
+          "method": "record_trade()",
+          "success": true,
+          "result": "Recorded trade 56a6186b...",
+          "error": null
+        },
+        {
+          "method": "record_exit()",
+          "success": true,
+          "result": "Exit recorded: 545",
+          "error": null
+        },
+        {
+          "method": "record_arbitrage_exit()",
+          "success": true,
+          "result": "Arb exit recorded",
+          "error": null
+        },
+        {
+          "method": "get_metrics()",
+          "success": true,
+          "result": "trades=4, win_rate=10000.00%",
+          "error": null
+        },
+        {
+          "method": "get_daily_pnl()",
+          "success": true,
+          "result": "Got 1 days of data",
+          "error": null
+        },
+        {
+          "method": "get_strategy_breakdown()",
+          "success": true,
+          "result": "Strategies: ['btc', 'weather']",
+          "error": null
+        },
+        {
+          "method": "Metrics.to_dict()",
+          "success": true,
+          "result": "Serialization works",
+          "error": null
+        }
+      ],
+      "potential_fixes": []
+    },
+    "alert_service": {
+      "status": "PASS",
+      "import_test": {
+        "success": true,
+        "error": null
+      },
+      "instantiation_test": {
+        "success": true,
+        "error": null
+      },
+      "method_tests": [
+        {
+          "method": "AlertType enum",
+          "success": true,
+          "result": "All required values present",
+          "error": null
+        },
+        {
+          "method": "AlertPriority enum",
+          "success": true,
+          "result": "All required values present",
+          "error": null
+        },
+        {
+          "method": "send()",
+          "success": true,
+          "result": "Sent alert alert-1",
+          "error": null
+        },
+        {
+          "method": "opportunity()",
+          "success": true,
+          "result": "Opportunity alert sent",
+          "error": null
+        },
+        {
+          "method": "trade_executed()",
+          "success": true,
+          "result": "Trade executed alert sent",
+          "error": null
+        },
+        {
+          "method": "trade_failed()",
+          "success": true,
+          "result": "Trade failed alert sent",
+          "error": null
+        },
+        {
+          "method": "circuit_breaker()",
+          "success": true,
+          "result": "Circuit breaker alert sent",
+          "error": null
+        },
+        {
+          "method": "risk_warning()",
+          "success": true,
+          "result": "Risk warning alert sent",
+          "error": null
+        },
+        {
+          "method": "get_recent()",
+          "success": true,
+          "result": "Got 6 recent alerts",
+          "error": null
+        },
+        {
+          "method": "get_unacknowledged()",
+          "success": true,
+          "result": "Got 6 unacknowledged",
+          "error": null
+        },
+        {
+          "method": "acknowledge()",
+          "success": true,
+          "result": "Acknowledged: True",
+          "error": null
+        },
+        {
+          "method": "acknowledge_all()",
+          "success": true,
+          "result": "Acknowledged 5 alerts",
+          "error": null
+        },
+        {
+          "method": "get_stats()",
+          "success": true,
+          "result": "Stats: {'total_alerts': 6, 'history_size': 6, 'unacknowledged': 0, 'by_type': {'risk_warning': 1, 'circuit_breaker': 1, 'trade_failed': 1, 'trade_executed': 1, 'opportunity': 1, 'info': 1}, 'by_priority': {'high': 2, 'critical': 1, 'medium': 2, 'low': 1}}",
+          "error": null
+        }
+      ],
+      "potential_fixes": []
+    },
+    "strategy_orchestrator": {
+      "status": "PASS",
+      "import_test": {
+        "success": true,
+        "error": null
+      },
+      "instantiation_test": {
+        "success": true,
+        "error": null
+      },
+      "method_tests": [
+        {
+          "method": "register()",
+          "success": true,
+          "result": "Strategy registered",
+          "error": null
+        },
+        {
+          "method": "enable_strategy()",
+          "success": true,
+          "result": "Enabled: True",
+          "error": null
+        },
+        {
+          "method": "set_mode()",
+          "success": true,
+          "result": "Mode set to paper",
+          "error": null
+        },
+        {
+          "method": "set_auto_trade()",
+          "success": true,
+          "result": "Auto-trade set to False",
+          "error": null
+        },
+        {
+          "method": "get_status() before start",
+          "success": true,
+          "result": "Status keys: ['is_running', 'auto_trade_enabled', 'mode', 'uptime_seconds', 'strategies', 'stats', 'components']",
+          "error": null
+        },
+        {
+          "method": "start()",
+          "success": true,
+          "result": "Orchestrator started",
+          "error": null
+        },
+        {
+          "method": "manual_scan()",
+          "success": true,
+          "result": "Found 0 signals",
+          "error": null
+        },
+        {
+          "method": "stop()",
+          "success": true,
+          "result": "Orchestrator stopped",
+          "error": null
+        },
+        {
+          "method": "unregister()",
+          "success": true,
+          "result": "Unregistered: True",
+          "error": null
+        },
+        {
+          "method": "load_config()",
+          "success": true,
+          "result": "Config loaded from DB",
+          "error": null
+        },
+        {
+          "method": "save_config()",
+          "success": true,
+          "result": "Config saved to DB",
+          "error": null
+        }
+      ],
+      "potential_fixes": []
+    },
+    "backtest_engine": {
+      "status": "PASS",
+      "import_test": {
+        "success": true,
+        "error": null
+      },
+      "instantiation_test": {
+        "success": true,
+        "error": null
+      },
+      "method_tests": [
+        {
+          "method": "BacktestConfig creation",
+          "success": true,
+          "result": "balance=100000, kelly=0.25",
+          "error": null
+        },
+        {
+          "method": "run()",
+          "success": true,
+          "result": "final_balance=100000, trades=0",
+          "error": null
+        },
+        {
+          "method": "run_multiple()",
+          "success": true,
+          "result": "Results for 1 strategies",
+          "error": null
+        },
+        {
+          "method": "BacktestResult.to_dict()",
+          "success": true,
+          "result": "Serialization works",
+          "error": null
+        },
+        {
+          "method": "BacktestTrade.to_dict()",
+          "success": true,
+          "result": "Trade serialization works",
+          "error": null
+        }
+      ],
+      "potential_fixes": []
+    },
+    "main_integration": {
+      "status": "PASS",
+      "import_test": {
+        "success": true,
+        "error": null
+      },
+      "instantiation_test": {
+        "success": true,
+        "error": null
+      },
+      "method_tests": [
+        {
+          "method": "FastAPI app",
+          "success": true,
+          "result": "App title: Kalshi Arbitrage Scanner",
+          "error": null
+        },
+        {
+          "method": "get/set_orchestrator()",
+          "success": true,
+          "result": "Functions work correctly",
+          "error": null
+        },
+        {
+          "method": "API routes exist",
+          "success": true,
+          "result": "All 8 required routes found",
+          "error": null
+        },
+        {
+          "method": "/health endpoint",
+          "success": true,
+          "result": "Response: {'status': 'healthy', 'paper_mode': True}",
+          "error": null
+        }
+      ],
+      "potential_fixes": []
+    }
+  }
+}

@@ -29,10 +29,36 @@ export interface SeriesResult {
   bracket_count: number;
   brackets: BracketMarket[];
   best_cost: number | null;
+  totals: BracketTotals | null;
+  arbitrage: ArbitrageAnalysis | null;
   opportunities: WeatherOpportunity[];
   near_misses: NearMissRecord[];
   forecast: SeriesForecast | null;
   error: string | null;
+}
+
+export interface BracketTotals {
+  yes_ask: number;
+  yes_bid: number;
+  no_ask: number;
+  no_bid: number;
+  volume: number;
+}
+
+export interface ArbitrageStrategy {
+  cost: number;
+  payout: number;
+  profit: number;
+  is_arb: boolean;
+  brackets?: { title: string; no_ask: number }[];
+}
+
+export interface ArbitrageAnalysis {
+  all_yes: ArbitrageStrategy;
+  all_no: ArbitrageStrategy;
+  min_2_no: ArbitrageStrategy;
+  best_strategy: string | null;
+  has_arbitrage: boolean;
 }
 
 export interface BracketMarket {
@@ -42,6 +68,8 @@ export interface BracketMarket {
   cap_strike: number | null;
   yes_ask: number;
   yes_bid: number;
+  no_ask: number;
+  no_bid: number;
   volume: number;
 }
 

@@ -172,6 +172,14 @@ Classify Kalshi markets as threshold or bracket type
 |----------|--------|---------|-------------|
 | MarketClassifier.classify | market: dict | Tuple[MarketType, dict] | Parse market subtitle/title, return type and extracted data |
 
+### arbitrage_calculator.py
+Three-strategy arbitrage analysis for mutually exclusive bracket markets
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| ArbitrageCalculator | - | - | Calculator for bracket arbitrage strategies |
+| ArbitrageCalculator.analyze | brackets: List[Dict[str, Any]] | Dict[str, Any] | Analyze all_yes, all_no, min_2_no strategies and return best |
+
 ### arbitrage_detector.py
 Detect arbitrage opportunities between threshold and bracket markets
 
@@ -816,6 +824,14 @@ Main arbitrage hub with sub-navigation
 | Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
 | ArbitrageHub | - | JSX.Element | Container with Crypto/Weather/Economic sub-tabs, route to section components |
+
+### ArbitrageAnalysisBox.tsx
+Three-strategy arbitrage analysis display component
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| StrategyCard | label, strategy, isBest | JSX.Element | Individual strategy card with cost/profit/status display |
+| ArbitrageAnalysisBox | arbitrage: ArbitrageAnalysis | JSX.Element | Display all_yes, all_no, min_2_no strategies with best strategy highlighting |
 
 ### CryptoArbitrageSection.tsx
 Crypto arbitrage scanner with card-based UI

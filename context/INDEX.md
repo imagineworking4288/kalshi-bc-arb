@@ -89,6 +89,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | stop.bat | Stop all Kalshi platform services |
 | run_scanners.py | Scanner service entry point |
 | run_logs.py | Log viewer entry point |
+| test_core_components.py | Core trading infrastructure component test suite |
 | backend/api/__init__.py | API module exports |
 | backend/api/routes.py | REST API endpoint handlers |
 | backend/api/websocket.py | WebSocket connection manager |
@@ -98,6 +99,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/models/__init__.py | Models module exports |
 | backend/models/schemas.py | Pydantic request models |
 | backend/services/__init__.py | Services module exports all classes |
+| backend/services/arbitrage_calculator.py | Three-strategy arbitrage calculator for mutually exclusive brackets |
 | backend/services/arbitrage_detector.py | Finds profitable arbitrage opportunities |
 | backend/services/fee_calculator.py | Kalshi fee calculation logic |
 | backend/services/kalshi_client.py | Kalshi REST API client |
@@ -145,6 +147,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/src/main.tsx | React DOM entry point |
 | frontend/src/vite-env.d.ts | Vite type definitions |
 | frontend/src/components/analytics/AnalyticsTab.tsx | P&L summary dashboard |
+| frontend/src/components/arbitrage/ArbitrageAnalysisBox.tsx | Three-strategy arbitrage analysis display component |
 | frontend/src/components/arbitrage/ArbitrageHub.tsx | Main arbitrage hub with sub-navigation |
 | frontend/src/components/arbitrage/CryptoArbitrageSection.tsx | Crypto arbitrage scanner with card-based UI |
 | frontend/src/components/arbitrage/WeatherArbitrageSection.tsx | Weather arbitrage scanner with bracket sorting and forecast highlighting |

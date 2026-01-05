@@ -20,11 +20,13 @@ class StrategyType(str, Enum):
 
 class SignalType(str, Enum):
     """Types of trading signals."""
+    DIRECTIONAL = "directional"
+    ARBITRAGE = "arbitrage"
+    SPREAD = "spread"
     BUY_YES = "buy_yes"
     BUY_NO = "buy_no"
     SELL_YES = "sell_yes"
     SELL_NO = "sell_no"
-    ARBITRAGE = "arbitrage"
 
 
 class SignalStatus(str, Enum):
@@ -57,7 +59,6 @@ class TradingSignal:
     - Single-leg directional trades (edge-based)
     - Multi-leg arbitrage opportunities
     """
-    id: str
     strategy_type: StrategyType
     ticker: str  # Primary ticker (or event ticker for arbitrage)
     signal_type: SignalType
@@ -65,6 +66,7 @@ class TradingSignal:
     model_prob: float
     market_price: int  # In cents
     recommended_size: int
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
     confidence: float = 1.0
     is_arbitrage: bool = False
     legs: List[SignalLeg] = field(default_factory=list)

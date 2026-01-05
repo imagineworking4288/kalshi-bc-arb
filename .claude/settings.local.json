@@ -42,7 +42,8 @@
       "Bash(powershell:*)",
       "Bash(./backend/venv/Scripts/python.exe -m uvicorn:*)",
       "Bash(ls:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(..venvScriptspython.exe test_core_components.py)"
     ]
   }
 }

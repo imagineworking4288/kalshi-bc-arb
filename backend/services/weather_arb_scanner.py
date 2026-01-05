@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from backend.config.locations import get_all_locations, LocationConfig
 from backend.config.fees import FeeCalculator
 from backend.services.nws_client import NWSClient
+from backend.services.arbitrage_calculator import ArbitrageCalculator
 
 logger = logging.getLogger("weather_arb")
 
@@ -67,6 +68,7 @@ class WeatherArbScanner:
         self.kalshi = kalshi_client
         self.nws = NWSClient()
         self.locations = get_all_locations()
+        self.arb_calculator = ArbitrageCalculator()
 
         # Results storage
         self.scan_count = 0
@@ -176,6 +178,8 @@ class WeatherArbScanner:
             "bracket_count": 0,
             "brackets": [],
             "best_cost": None,
+            "totals": None,
+            "arbitrage": None,
             "opportunities": [],
             "near_misses": [],
             "forecast": None,
@@ -219,6 +223,7 @@ class WeatherArbScanner:
 
                 for market in markets:
                     yes_ask = market.get("yes_ask", 0) or 0
+                    no_ask = market.get("no_ask", 0) or 0
                     total_cost += yes_ask
 
                     brackets.append({
@@ -227,12 +232,26 @@ class WeatherArbScanner:
                         "floor_strike": market.get("floor_strike"),
                         "cap_strike": market.get("cap_strike"),
                         "yes_ask": yes_ask,
-                        "yes_bid": market.get("yes_bid", 0),
-                        "volume": market.get("volume", 0)
+                        "yes_bid": market.get("yes_bid", 0) or 0,
+                        "no_ask": no_ask,
+                        "no_bid": market.get("no_bid", 0) or 0,
+                        "volume": market.get("volume", 0) or 0
                     })
 
                 result["brackets"] = brackets
                 result["best_cost"] = total_cost
+
+                # Calculate totals
+                result["totals"] = {
+                    "yes_ask": sum(b["yes_ask"] for b in brackets),
+                    "yes_bid": sum(b["yes_bid"] for b in brackets),
+                    "no_ask": sum(b["no_ask"] for b in brackets),
+                    "no_bid": sum(b["no_bid"] for b in brackets),
+                    "volume": sum(b["volume"] for b in brackets)
+                }
+
+                # Run arbitrage analysis with all 3 strategies
+                result["arbitrage"] = self.arb_calculator.analyze(brackets)
 
                 # Get forecast temperature
                 forecast_temp = None

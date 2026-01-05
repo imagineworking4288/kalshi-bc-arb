@@ -559,13 +559,15 @@ class StrategyOrchestrator:
             row = await cursor.fetchone()
 
             if row:
-                self._auto_trade_enabled = bool(row.get("auto_trade_enabled", 0))
-                self._mode = row.get("mode", "paper")
-                self.kelly.config.fraction = row.get("kelly_fraction", 0.25)
-                self.kelly.config.min_edge_percent = row.get("min_edge_percent", 5.0)
-                self.risk.limits.max_position_per_market = row.get("max_position_per_market", 100)
-                self.risk.limits.max_daily_loss_cents = row.get("max_daily_loss_cents", 5000)
-                self.circuit.config.max_consecutive_losses = row.get("cb_max_consecutive_losses", 5)
+                # Convert Row to dict for safe .get() access
+                row_dict = dict(row) if row else {}
+                self._auto_trade_enabled = bool(row_dict.get("auto_trade_enabled", 0))
+                self._mode = row_dict.get("mode", "paper")
+                self.kelly.config.fraction = row_dict.get("kelly_fraction", 0.25)
+                self.kelly.config.min_edge_percent = row_dict.get("min_edge_percent", 5.0)
+                self.risk.limits.max_position_per_market = row_dict.get("max_position_per_market", 100)
+                self.risk.limits.max_daily_loss_cents = row_dict.get("max_daily_loss_cents", 5000)
+                self.circuit.config.max_consecutive_losses = row_dict.get("cb_max_consecutive_losses", 5)
 
                 logger.info("Loaded orchestrator config from database")
 

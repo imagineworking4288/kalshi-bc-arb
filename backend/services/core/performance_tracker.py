@@ -79,9 +79,10 @@ class PerformanceTracker:
         ticker: str,
         side: str,
         contracts: int,
-        price_cents: int,
-        fees_cents: int,
-        trade_id: Optional[str] = None
+        entry_price: int = None,
+        fees_cents: int = 0,
+        trade_id: Optional[str] = None,
+        price_cents: int = None  # Alias for entry_price
     ) -> str:
         """
         Record a new trade entry.
@@ -91,15 +92,18 @@ class PerformanceTracker:
             ticker: Market ticker
             side: "yes" or "no"
             contracts: Number of contracts
-            price_cents: Entry price in cents
+            entry_price: Entry price in cents (or use price_cents alias)
             fees_cents: Fees paid in cents
             trade_id: Optional trade ID (auto-generated if not provided)
+            price_cents: Alias for entry_price
 
         Returns:
             Trade ID
         """
         trade_id = trade_id or str(uuid.uuid4())
         entry_time = datetime.utcnow().isoformat()
+        # Support both entry_price and price_cents parameter names
+        actual_price = entry_price if entry_price is not None else price_cents
 
         async with self.db.connection() as conn:
             await conn.execute("""
@@ -109,7 +113,7 @@ class PerformanceTracker:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)
             """, (
                 trade_id, strategy_type, ticker, side, contracts,
-                price_cents, fees_cents, entry_time
+                actual_price, fees_cents, entry_time
             ))
             await conn.commit()
 

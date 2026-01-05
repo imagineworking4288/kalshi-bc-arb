@@ -8,6 +8,7 @@ import {
   getCostColor,
   getCostBgColor
 } from '../../types/weather';
+import { ArbitrageAnalysisBox } from './ArbitrageAnalysisBox';
 
 const CITIES = ['NYC', 'LAX', 'CHI', 'MIA', 'DEN', 'AUS', 'PHL'];
 
@@ -295,13 +296,22 @@ function BracketTable({
         <button onClick={onClose} className="text-gray-400 hover:text-white p-1">X</button>
       </div>
 
+      {/* Arbitrage Analysis Box */}
+      {series.arbitrage && (
+        <div className="p-4 border-b border-gray-700">
+          <ArbitrageAnalysisBox arbitrage={series.arbitrage} />
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="bg-gray-700/50 text-left">
               <th className="p-3">Bracket</th>
-              <th className="p-3 text-right">YES Ask</th>
-              <th className="p-3 text-right">YES Bid</th>
+              <th className="p-3 text-right text-cyan-400">YES Ask</th>
+              <th className="p-3 text-right text-orange-400">NO Ask</th>
+              <th className="p-3 text-right text-gray-400">YES Bid</th>
+              <th className="p-3 text-right text-gray-400">NO Bid</th>
               <th className="p-3 text-right">Volume</th>
               <th className="p-3">Notes</th>
             </tr>
@@ -322,11 +332,17 @@ function BracketTable({
                     <td className="p-3 font-mono text-sm">
                       {getBracketLabel(bracket)}
                     </td>
-                    <td className="p-3 text-right text-green-400 font-medium">
+                    <td className="p-3 text-right text-cyan-400 font-medium">
                       {bracket.yes_ask ?? 0}¢
                     </td>
-                    <td className="p-3 text-right text-gray-400">
+                    <td className="p-3 text-right text-orange-400 font-medium">
+                      {bracket.no_ask ?? 0}¢
+                    </td>
+                    <td className="p-3 text-right text-gray-500">
                       {bracket.yes_bid ?? 0}¢
+                    </td>
+                    <td className="p-3 text-right text-gray-500">
+                      {bracket.no_bid ?? 0}¢
                     </td>
                     <td className="p-3 text-right text-gray-400">
                       {(bracket.volume ?? 0).toLocaleString()}
@@ -339,7 +355,7 @@ function BracketTable({
               })
             ) : (
               <tr>
-                <td colSpan={5} className="p-8 text-center text-gray-400">
+                <td colSpan={7} className="p-8 text-center text-gray-400">
                   <div className="text-lg mb-2">No markets available</div>
                   <div className="text-sm">
                     {type === 'low'
@@ -355,10 +371,20 @@ function BracketTable({
             <tr className="border-t-2 border-gray-600 bg-gray-700/50 font-bold">
               <td className="p-3">TOTAL</td>
               <td className={`p-3 text-right ${getCostColor(costStatus)}`}>
-                {series.best_cost != null ? `${series.best_cost}c` : '-'}
+                {series.totals?.yes_ask != null ? `${series.totals.yes_ask}¢` : (series.best_cost != null ? `${series.best_cost}¢` : '-')}
               </td>
-              <td className="p-3"></td>
-              <td className="p-3"></td>
+              <td className="p-3 text-right text-orange-400">
+                {series.totals?.no_ask != null ? `${series.totals.no_ask}¢` : '-'}
+              </td>
+              <td className="p-3 text-right text-gray-500">
+                {series.totals?.yes_bid != null ? `${series.totals.yes_bid}¢` : '-'}
+              </td>
+              <td className="p-3 text-right text-gray-500">
+                {series.totals?.no_bid != null ? `${series.totals.no_bid}¢` : '-'}
+              </td>
+              <td className="p-3 text-right text-gray-400">
+                {series.totals?.volume != null ? series.totals.volume.toLocaleString() : '-'}
+              </td>
               <td className={`p-3 text-sm ${getCostColor(costStatus)}`}>
                 {costStatus === 'opportunity' && '[TARGET] ARBITRAGE!'}
                 {costStatus === 'near_miss' && '[FAST] Near Miss'}

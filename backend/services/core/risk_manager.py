@@ -54,16 +54,16 @@ class RiskManager:
     - Open position count limit
     """
 
-    def __init__(self, db, limits: Optional[RiskLimits] = None):
+    def __init__(self, limits: Optional[RiskLimits] = None, db=None):
         """
         Initialize risk manager.
 
         Args:
-            db: Database connection
             limits: Risk limits configuration
+            db: Database connection (optional)
         """
-        self.db = db
         self.limits = limits or RiskLimits()
+        self.db = db
 
         # In-memory tracking (synced with DB periodically)
         self._positions: Dict[str, PositionState] = {}
@@ -256,11 +256,14 @@ class RiskManager:
             self._daily_pnl_cents += pnl_cents
             logger.info(f"Recorded P&L: {pnl_cents}¢ (daily total: {self._daily_pnl_cents}¢)")
 
-    async def close_position(self, ticker: str, pnl_cents: int) -> None:
-        """Close a position and record P&L."""
+    async def close_position(self, ticker: str, contracts: int, pnl_cents: int = 0) -> None:
+        """Close (or reduce) a position and record P&L."""
         async with self._lock:
             if ticker in self._positions:
-                del self._positions[ticker]
+                position = self._positions[ticker]
+                position.contracts -= contracts
+                if position.contracts <= 0:
+                    del self._positions[ticker]
             self._daily_pnl_cents += pnl_cents
 
     def get_status(self) -> dict:

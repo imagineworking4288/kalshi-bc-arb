@@ -327,8 +327,11 @@ class SignalManager:
 
     def _row_to_signal(self, row) -> TradingSignal:
         """Convert database row to TradingSignal."""
+        # Convert Row to dict for safe .get() access
+        row_dict = dict(row)
+
         # Parse legs JSON
-        legs_json = row["legs_json"] or "[]"
+        legs_json = row_dict.get("legs_json") or "[]"
         legs_data = json.loads(legs_json)
         legs = [
             SignalLeg(
@@ -345,26 +348,26 @@ class SignalManager:
         ]
 
         # Parse metadata JSON
-        metadata_json = row["metadata_json"] or "{}"
+        metadata_json = row_dict.get("metadata_json") or "{}"
         metadata = json.loads(metadata_json)
 
         return TradingSignal(
-            id=row["id"],
-            strategy_type=StrategyType(row["strategy_type"]),
-            ticker=row["ticker"],
-            signal_type=SignalType(row["signal_type"]),
-            edge_percent=row["edge_percent"],
-            model_prob=row["model_prob"],
-            market_price=row["market_price"],
-            recommended_size=row["recommended_size"],
-            confidence=row.get("confidence", 1.0),
-            is_arbitrage=bool(row.get("is_arbitrage", 0)),
+            id=row_dict["id"],
+            strategy_type=StrategyType(row_dict["strategy_type"]),
+            ticker=row_dict["ticker"],
+            signal_type=SignalType(row_dict["signal_type"]),
+            edge_percent=row_dict["edge_percent"],
+            model_prob=row_dict["model_prob"],
+            market_price=row_dict["market_price"],
+            recommended_size=row_dict["recommended_size"],
+            confidence=row_dict.get("confidence", 1.0),
+            is_arbitrage=bool(row_dict.get("is_arbitrage", 0)),
             legs=legs,
-            status=SignalStatus(row["status"]),
-            created_at=datetime.fromisoformat(row["created_at"]),
-            expires_at=datetime.fromisoformat(row["expires_at"]) if row.get("expires_at") else None,
-            executed_at=datetime.fromisoformat(row["executed_at"]) if row.get("executed_at") else None,
-            execution_price=row.get("execution_price"),
-            notes=row.get("notes", ""),
+            status=SignalStatus(row_dict["status"]),
+            created_at=datetime.fromisoformat(row_dict["created_at"]),
+            expires_at=datetime.fromisoformat(row_dict["expires_at"]) if row_dict.get("expires_at") else None,
+            executed_at=datetime.fromisoformat(row_dict["executed_at"]) if row_dict.get("executed_at") else None,
+            execution_price=row_dict.get("execution_price"),
+            notes=row_dict.get("notes", ""),
             metadata=metadata
         )
