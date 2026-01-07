@@ -8,9 +8,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 import httpx
-import logging
 
-logger = logging.getLogger(__name__)
+from .log_config import get_logger
+
+logger = get_logger("spot_price_client")
 
 
 @dataclass

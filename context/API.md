@@ -20,6 +20,15 @@ Application settings from environment variables
 | Settings.has_kalshi_credentials | - | bool | Property: check if API key and private key exist |
 | get_settings | - | Settings | Cached settings singleton via lru_cache |
 
+### logging_config.py
+Thread-safe logging with QueueHandler pattern to avoid Windows PermissionError
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| setup_logging | log_dir: str = "logs", log_level: int = INFO, max_bytes: int = 10MB, backup_count: int = 5, console_output: bool = True | Logger | Initialize thread-safe logging with queue-based rotation, call once at startup |
+| shutdown_logging | - | None | Clean shutdown of logging system, called automatically via atexit |
+| get_logger | name: str | Logger | Get named logger, use instead of logging.getLogger() |
+
 ---
 
 ## backend/api/

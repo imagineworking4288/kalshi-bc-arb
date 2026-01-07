@@ -3,14 +3,15 @@ Alert and notification service.
 Sends alerts via console logging and WebSocket.
 """
 
-import logging
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+from ..log_config import get_logger
+
+logger = get_logger("alert_service")
 
 
 class AlertType(str, Enum):

@@ -47,9 +47,13 @@ export interface BracketTotals {
 
 export interface ArbitrageStrategy {
   cost: number;
+  fees: number;
+  net_cost: number;
   payout: number;
-  profit: number;
+  gross_profit: number;
+  net_profit: number;
   is_arb: boolean;
+  brackets_used?: number;
   brackets?: { title: string; no_ask: number }[];
 }
 

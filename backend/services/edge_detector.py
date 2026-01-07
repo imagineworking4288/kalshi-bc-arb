@@ -4,13 +4,14 @@ Identifies mispriced markets by comparing model probabilities to market prices.
 """
 
 import math
-import logging
 from dataclasses import dataclass
 from typing import Optional, List
 from datetime import datetime
 import httpx
 
-logger = logging.getLogger(__name__)
+from .log_config import get_logger
+
+logger = get_logger("edge_detector")
 
 
 @dataclass

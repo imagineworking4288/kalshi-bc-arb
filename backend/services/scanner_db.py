@@ -5,13 +5,13 @@ Scanners write, API reads.
 
 import sqlite3
 import json
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 import threading
+from .log_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("scanner_db")
 
 class ScannerDatabase:
     """Thread-safe database for scanner results."""

@@ -4,12 +4,12 @@ Automatically executes trades based on signals from EdgeDetector.
 """
 
 import asyncio
-import logging
 from datetime import datetime, date
 from typing import Optional, List
 from .edge_detector import EdgeDetector, TradingSignal
+from .log_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("auto_trader")
 
 
 class AutoTrader:

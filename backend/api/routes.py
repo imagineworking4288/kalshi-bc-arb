@@ -21,6 +21,7 @@ from ..services.portfolio_service import PortfolioService
 from ..services.watchlist_service import WatchlistService
 from ..services.scanner_db import ScannerDatabase
 from ..services.log_config import LOG_DIR, MAIN_LOG
+from ..services.fee_calculator import FeeCalculator, OrderType
 
 router = APIRouter()
 
@@ -1371,3 +1372,92 @@ async def run_backtest(request: Request):
         # Run all strategies
         results = await engine.run_multiple(list(orch._strategies.values()), config)
         return {st: r.to_dict() for st, r in results.items()}
+
+
+# ============== FEE CALCULATOR ==============
+
+@router.get("/fees/calculate")
+async def calculate_fee(
+    price: int = Query(..., ge=1, le=99, description="Price in cents (1-99)"),
+    contracts: int = Query(1, ge=1, description="Number of contracts"),
+    maker: bool = Query(False, description="Use maker fee (default: taker)")
+):
+    """
+    Calculate Kalshi trading fee for a single trade.
+
+    Formula: rate × price × (1 - price)
+    - Taker: 7% rate
+    - Maker: 3.5% rate
+    """
+    order_type = OrderType.MAKER if maker else OrderType.TAKER
+    breakdown = FeeCalculator.calculate_trade_fee(price, contracts, order_type)
+
+    return {
+        "price_cents": breakdown.price_cents,
+        "contracts": breakdown.contracts,
+        "order_type": breakdown.order_type.value,
+        "fee_per_contract": round(breakdown.fee_per_contract, 3),
+        "total_fee": round(breakdown.total_fee, 2),
+        "fee_percentage": round(breakdown.fee_percentage, 2),
+        "trade_cost": price * contracts,
+        "total_with_fees": round(price * contracts + breakdown.total_fee, 2)
+    }
+
+
+@router.get("/fees/table")
+async def get_fee_table():
+    """
+    Get fee table for common price points.
+    Returns fees for prices 5, 10, 15, ..., 95 cents.
+    """
+    table = []
+
+    for price in range(5, 100, 5):
+        taker_fee = FeeCalculator.fee_per_contract(price, OrderType.TAKER)
+        maker_fee = FeeCalculator.fee_per_contract(price, OrderType.MAKER)
+
+        table.append({
+            "price": price,
+            "taker_fee": round(taker_fee, 3),
+            "maker_fee": round(maker_fee, 3),
+            "taker_pct": round(taker_fee / price * 100, 2),
+            "maker_pct": round(maker_fee / price * 100, 2)
+        })
+
+    return {
+        "table": table,
+        "note": "Fees are symmetric around 50¢ due to formula: rate × price × (1 - price)"
+    }
+
+
+@router.post("/fees/analyze-arbitrage")
+async def analyze_arbitrage_fees(data: dict):
+    """
+    Analyze arbitrage opportunities with fee calculations.
+
+    Request body:
+    {
+        "yes_asks": [11, 6, 18, 34, 28, 15],  // YES ask prices in cents
+        "no_asks": [91, 96, 83, 67, 73, 86],  // NO ask prices in cents
+        "maker": false  // Optional: use maker fees (default: taker)
+    }
+
+    Returns analysis for all three strategies:
+    - all_yes: Buy YES on every bracket
+    - all_no: Buy NO on every bracket
+    - min_2_no: Buy NO on 2 cheapest brackets
+    """
+    yes_asks = data.get("yes_asks", [])
+    no_asks = data.get("no_asks", [])
+    maker = data.get("maker", False)
+
+    if not yes_asks or not no_asks:
+        raise HTTPException(400, "Must provide yes_asks and no_asks arrays")
+
+    if len(yes_asks) != len(no_asks):
+        raise HTTPException(400, "yes_asks and no_asks must have same length")
+
+    order_type = OrderType.MAKER if maker else OrderType.TAKER
+    result = FeeCalculator.analyze_weather_arbitrage(yes_asks, no_asks, order_type)
+
+    return result

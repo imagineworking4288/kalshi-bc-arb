@@ -2,14 +2,15 @@
 Watchlist Service - Save and manage favorite markets
 """
 import uuid
-import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
 from ..database.connection import db
 from .kalshi_client import KalshiClient
 
-logger = logging.getLogger(__name__)
+from .log_config import get_logger
+
+logger = get_logger("watchlist_service")
 
 
 class WatchlistService:

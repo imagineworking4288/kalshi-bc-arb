@@ -16,10 +16,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Setup logging FIRST
-from backend.services.log_config import setup_logging
+from backend.services.log_config import setup_logging, shutdown_logging, get_logger
 setup_logging("scanner")
 
-logger = logging.getLogger("scanner")
+logger = get_logger("scanner")
 
 from backend.services.kalshi_client import KalshiClient
 from backend.services.btc_arb_scanner import BTCArbitrageScanner
@@ -103,20 +103,25 @@ class ScannerService:
 
 def main():
     """Main entry point."""
-    service = ScannerService()
-
-    def signal_handler(sig, frame):
-        print("\n")
-        service.stop()
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
     try:
+        service = ScannerService()
+
+        def signal_handler(sig, frame):
+            print("\n")
+            service.stop()
+            shutdown_logging()
+            sys.exit(0)
+
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+
         asyncio.run(service.start())
     except KeyboardInterrupt:
-        service.stop()
+        logger.info("Scanner service stopped by user")
+    except Exception as e:
+        logger.exception(f"Scanner service error: {e}")
+    finally:
+        shutdown_logging()
 
 
 if __name__ == "__main__":

@@ -43,7 +43,14 @@
       "Bash(./backend/venv/Scripts/python.exe -m uvicorn:*)",
       "Bash(ls:*)",
       "Bash(wc:*)",
-      "Bash(..venvScriptspython.exe test_core_components.py)"
+      "Bash(..venvScriptspython.exe test_core_components.py)",
+      "Bash(timeout 10 bash:*)",
+      "Bash(1 echo \"Scan triggered, waiting 8 seconds...\" sleep 8 curl -s \"http://localhost:8001/api/weather-arb/status\")",
+      "Bash(1 echo \"Scan triggered, waiting 10 seconds for results...\" sleep 10 curl -s \"http://localhost:8001/api/weather-arb/status\")",
+      "Bash(npx tsc:*)",
+      "Bash(for file in arbitrage_calculator.py auto_trader.py edge_detector.py portfolio_service.py scanner_db.py spot_price_client.py watchlist_service.py)",
+      "Bash(if [ -f \"$file\" ])",
+      "Bash(comm:*)"
     ]
   }
 }

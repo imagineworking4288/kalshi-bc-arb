@@ -62,7 +62,10 @@ class ActivityHandler(logging.Handler):
 
 def setup_logger(name: str, activity_buffer: ActivityBuffer = None) -> logging.Logger:
     """
-    Set up a logger with console and optional file handlers.
+    Set up a logger with optional activity buffer.
+
+    NOTE: File and console handlers are managed by the centralized log_config.py
+    using QueueHandler pattern. This function only adds the ActivityBuffer handler.
 
     Args:
         name: Logger name
@@ -73,38 +76,14 @@ def setup_logger(name: str, activity_buffer: ActivityBuffer = None) -> logging.L
     """
     logger = logging.getLogger(name)
 
-    # Only add handlers if none exist
-    if logger.handlers:
-        return logger
+    # Check if we already added the activity buffer handler
+    for handler in logger.handlers:
+        if isinstance(handler, ActivityHandler):
+            return logger
 
     logger.setLevel(logging.DEBUG)
 
-    # Console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_format = logging.Formatter(
-        '[%(name)s] %(message)s'
-    )
-    console_handler.setFormatter(console_format)
-    logger.addHandler(console_handler)
-
-    # File handler (create logs directory if needed)
-    logs_dir = os.path.join(os.path.dirname(__file__), '..', '..', 'logs')
-    os.makedirs(logs_dir, exist_ok=True)
-
-    file_handler = logging.FileHandler(
-        os.path.join(logs_dir, f'{name}.log'),
-        encoding='utf-8'
-    )
-    file_handler.setLevel(logging.DEBUG)
-    file_format = logging.Formatter(
-        '%(asctime)s [%(levelname)s] %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    file_handler.setFormatter(file_format)
-    logger.addHandler(file_handler)
-
-    # Activity buffer handler (for UI)
+    # Activity buffer handler (for UI) - this is in-memory only, no file I/O
     if activity_buffer:
         activity_handler = ActivityHandler(activity_buffer)
         activity_handler.setLevel(logging.INFO)

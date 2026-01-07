@@ -3,7 +3,6 @@ Atomic multi-order execution for arbitrage and complex trades.
 Supports both paper and live execution modes.
 """
 
-import logging
 import math
 import time
 import uuid
@@ -11,7 +10,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional, Dict, Any
 
-logger = logging.getLogger(__name__)
+from ..log_config import get_logger
+
+logger = get_logger("batch_executor")
 
 
 class OrderSide(str, Enum):

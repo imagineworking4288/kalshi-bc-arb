@@ -3,13 +3,14 @@ Performance tracking and metrics calculation.
 Tracks P&L, win rates, and trading statistics.
 """
 
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import uuid
 
-logger = logging.getLogger(__name__)
+from ..log_config import get_logger
+
+logger = get_logger("performance_tracker")
 
 
 @dataclass

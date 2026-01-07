@@ -3,7 +3,6 @@ Backtesting engine for historical strategy simulation.
 Runs strategies against historical data to evaluate performance.
 """
 
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
@@ -11,7 +10,9 @@ from typing import Dict, List, Optional, Any
 from .base_strategy import BaseStrategy, TradingSignal, StrategyType, SignalStatus
 from .kelly_sizing import KellySizing, KellyConfig
 
-logger = logging.getLogger(__name__)
+from ..log_config import get_logger
+
+logger = get_logger("backtest_engine")
 
 
 @dataclass

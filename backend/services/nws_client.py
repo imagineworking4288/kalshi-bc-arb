@@ -5,14 +5,14 @@ Fetches forecasts for weather market trading.
 Returns BOTH high and low temperatures.
 """
 
-import logging
 import httpx
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Any
 from dataclasses import dataclass
 import asyncio
+from .log_config import get_logger
 
-logger = logging.getLogger("nws_client")
+logger = get_logger("nws_client")
 
 @dataclass
 class WeatherForecast:

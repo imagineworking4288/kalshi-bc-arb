@@ -299,7 +299,7 @@ function BracketTable({
       {/* Arbitrage Analysis Box */}
       {series.arbitrage && (
         <div className="p-4 border-b border-gray-700">
-          <ArbitrageAnalysisBox arbitrage={series.arbitrage} />
+          <ArbitrageAnalysisBox key={`${city.code}-${type}`} arbitrage={series.arbitrage} />
         </div>
       )}
 

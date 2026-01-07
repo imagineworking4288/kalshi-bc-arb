@@ -4,7 +4,6 @@ Coordinates all strategies, manages execution pipeline, and controls trading.
 """
 
 import asyncio
-import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Set
 
@@ -17,7 +16,9 @@ from .batch_executor import BatchExecutor, OrderLeg, OrderSide, OrderAction
 from .performance_tracker import PerformanceTracker
 from .alert_service import AlertService
 
-logger = logging.getLogger(__name__)
+from ..log_config import get_logger
+
+logger = get_logger("strategy_orchestrator")
 
 
 class StrategyOrchestrator:

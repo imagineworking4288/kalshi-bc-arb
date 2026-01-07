@@ -4,12 +4,13 @@ Enforces position limits, daily loss limits, and exposure controls.
 """
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime, date
 from typing import Dict, Optional
 
-logger = logging.getLogger(__name__)
+from ..log_config import get_logger
+
+logger = get_logger("risk_manager")
 
 
 @dataclass

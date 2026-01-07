@@ -4,7 +4,6 @@ Handles creation, storage, expiration, and retrieval of trading signals.
 """
 
 import json
-import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
 
@@ -12,7 +11,9 @@ from .base_strategy import (
     TradingSignal, SignalStatus, StrategyType, SignalType, SignalLeg
 )
 
-logger = logging.getLogger(__name__)
+from ..log_config import get_logger
+
+logger = get_logger("signal_manager")
 
 
 class SignalManager:

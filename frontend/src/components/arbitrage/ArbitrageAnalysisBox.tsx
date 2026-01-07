@@ -37,22 +37,41 @@ function StrategyCard({ label, strategy, isBest }: StrategyCardProps) {
       <div className="space-y-1 text-sm">
         <div className="flex justify-between">
           <span className="text-gray-500">Cost:</span>
-          <span className="text-gray-300">{strategy.cost}¢</span>
+          <span className="text-gray-300">{strategy.cost ?? 0}¢</span>
         </div>
+        {strategy.fees != null && (
+          <div className="flex justify-between">
+            <span className="text-gray-500">Fees:</span>
+            <span className="text-orange-400">{strategy.fees.toFixed(1)}¢</span>
+          </div>
+        )}
+        {strategy.net_cost != null && (
+          <div className="flex justify-between">
+            <span className="text-gray-500">Net Cost:</span>
+            <span className="text-gray-300">{strategy.net_cost.toFixed(1)}¢</span>
+          </div>
+        )}
         <div className="flex justify-between">
           <span className="text-gray-500">Payout:</span>
-          <span className="text-gray-300">{strategy.payout}¢</span>
+          <span className="text-gray-300">{strategy.payout ?? 0}¢</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-500">P/L:</span>
+          <span className="text-gray-500">Net P/L:</span>
           <span className={`font-semibold ${
-            strategy.profit > 0 ? 'text-green-400' :
-            strategy.profit < 0 ? 'text-red-400' : 'text-gray-400'
+            (strategy.net_profit ?? 0) > 0 ? 'text-green-400' :
+            (strategy.net_profit ?? 0) < 0 ? 'text-red-400' : 'text-gray-400'
           }`}>
-            {strategy.profit > 0 ? '+' : ''}{strategy.profit}¢
+            {(strategy.net_profit ?? 0) > 0 ? '+' : ''}{(strategy.net_profit ?? 0).toFixed(1)}¢
             {isArb ? ' ✅' : ' ❌'}
           </span>
         </div>
+        {/* Warning if gross profit was positive but net is negative */}
+        {strategy.gross_profit != null && strategy.net_profit != null &&
+         strategy.gross_profit > 0 && strategy.net_profit < 0 && (
+          <div className="mt-1 text-xs text-yellow-400">
+            Was +{strategy.gross_profit}¢ before fees
+          </div>
+        )}
       </div>
     </div>
   );

@@ -3,11 +3,12 @@ Kelly Criterion position sizing.
 Calculates optimal bet size based on edge and bankroll.
 """
 
-import logging
 from dataclasses import dataclass
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+from ..log_config import get_logger
+
+logger = get_logger("kelly_sizing")
 
 
 @dataclass

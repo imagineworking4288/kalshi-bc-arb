@@ -1,12 +1,12 @@
 import httpx
 import asyncio
 import random
-import logging
 from typing import Optional, List, Dict, Any
 from ..config import get_settings
 from ..utils.kalshi_auth import KalshiAuth
+from .log_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("kalshi_client")
 
 
 class KalshiClient:

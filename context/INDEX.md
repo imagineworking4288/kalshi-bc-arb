@@ -96,6 +96,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/database/__init__.py | Database module exports |
 | backend/database/connection.py | SQLite async connection manager |
 | backend/database/schema.sql | Table definitions for paper trading |
+| backend/logging_config.py | Thread-safe logging with QueueHandler pattern |
 | backend/models/__init__.py | Models module exports |
 | backend/models/schemas.py | Pydantic request models |
 | backend/services/__init__.py | Services module exports all classes |

@@ -5,7 +5,6 @@ Scans Kalshi weather markets for bracket arbitrage opportunities.
 Handles BOTH high and low temperature markets (14 total series).
 """
 
-import logging
 import asyncio
 import sys
 from datetime import datetime
@@ -20,8 +19,9 @@ from backend.config.locations import get_all_locations, LocationConfig
 from backend.config.fees import FeeCalculator
 from backend.services.nws_client import NWSClient
 from backend.services.arbitrage_calculator import ArbitrageCalculator
+from backend.services.log_config import get_logger
 
-logger = logging.getLogger("weather_arb")
+logger = get_logger("weather_arb")
 
 @dataclass
 class WeatherOpportunity:
