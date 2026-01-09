@@ -581,6 +581,15 @@ Historical strategy backtesting engine
 
 ## backend/config/
 
+### __init__.py
+Pydantic settings with location configurations
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| Settings | - | BaseSettings | Application settings with Kalshi API, trading, scanner, database, and logging config |
+| Settings.has_kalshi_credentials | - | bool | Property: check if API key and private key path exist |
+| get_settings | - | Settings | Cached settings singleton via lru_cache |
+
 ### fees.py
 Kalshi fee calculation utilities
 

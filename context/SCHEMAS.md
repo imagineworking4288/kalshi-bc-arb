@@ -2,16 +2,22 @@
 
 ## Configuration
 
-### Settings (backend/config.py)
+### Settings (backend/config/__init__.py)
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| kalshi_api_url | str | "https://api.elections.kalshi.com/trade-api/v2" | Kalshi production API endpoint (updated URL) |
 | kalshi_api_key_id | str | "" | API key ID from Kalshi dashboard |
-| kalshi_private_key_path | str | "./keys/kalshi-private-key.pem" | Path to RSA private key file |
-| paper_trading_mode | bool | True | True for simulation, False for real money |
-| paper_starting_balance | float | 10000.00 | Initial paper account balance |
-| database_path | str | "./data/kalshi_arb.db" | SQLite database file path |
+| kalshi_private_key_path | str | "./kalshi_private_key.pem" | Path to RSA private key file |
+| kalshi_base_url | str | "https://api.elections.kalshi.com/trade-api/v2" | Kalshi production API endpoint |
+| kalshi_ws_url | str | "wss://api.elections.kalshi.com/trade-api/ws/v2" | Kalshi WebSocket endpoint |
+| paper_trading | bool | True | True for simulation, False for real money |
+| paper_trading_mode | bool | True | Alias for compatibility |
+| initial_paper_balance | int | 10000 | Initial paper balance in cents |
+| paper_starting_balance | float | 10000.00 | Initial paper balance in dollars (compatibility) |
+| btc_scan_interval | float | 2.0 | BTC scanner interval in seconds |
+| weather_scan_interval | float | 30.0 | Weather scanner interval in seconds |
+| database_path | str | "./data/kalshi.db" | SQLite database file path |
+| scanner_db_path | str | "./data/scanner_results.db" | Scanner results database path |
 | log_level | str | "INFO" | Logging verbosity level |
 
 ---
