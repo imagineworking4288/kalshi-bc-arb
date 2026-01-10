@@ -38,19 +38,14 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/models | backend/models/ | Pydantic request/response schemas |
 | backend/services | backend/services/ | Core business logic and external integrations |
 | backend/services/core | backend/services/core/ | Unified trading infrastructure (orchestrator, signals, risk, etc.) |
+| backend/services/analysis | backend/services/analysis/ | Analysis tools and probability calculators |
+| backend/services/execution | backend/services/execution/ | Order execution and validation components |
+| backend/services/risk | backend/services/risk/ | Risk management and monitoring |
+| backend/services/websocket | backend/services/websocket/ | WebSocket data synchronization |
+| backend/tests | backend/tests/ | Unit and integration test suites |
 | backend/utils | backend/utils/ | Kalshi RSA-PSS authentication |
 | backend/config | backend/config/ | Settings and location configurations |
-| frontend/components/analytics | frontend/src/components/analytics/ | P&L analytics display |
-| frontend/components/common | frontend/src/components/common/ | Reusable UI components |
-| frontend/components/layout | frontend/src/components/layout/ | Header and navigation |
-| frontend/components/arbitrage | frontend/src/components/arbitrage/ | Multi-market arbitrage hub with crypto and weather sections |
-| frontend/components/opportunities | frontend/src/components/opportunities/ | Arbitrage opportunity display and execution |
-| frontend/components/portfolio | frontend/src/components/portfolio/ | Portfolio overview and position tracking |
-| frontend/components/trade | frontend/src/components/trade/ | Manual trading interface |
-| frontend/components/trading | frontend/src/components/trading/ | Trading mode and position management |
-| frontend/components/watchlist | frontend/src/components/watchlist/ | Saved markets management |
-| frontend/components/autotrader | frontend/src/components/autotrader/ | Automated trading and edge detection |
-| frontend/components/btcarb | frontend/src/components/btcarb/ | Legacy BTC arbitrage (replaced by arbitrage hub) |
+| frontend/components/arbitrage | frontend/src/components/arbitrage/ | Limited arbitrage components (hooks and exports) |
 | frontend/hooks | frontend/src/hooks/ | Custom React hooks |
 | frontend/services | frontend/src/services/ | Backend API client |
 | frontend/stores | frontend/src/stores/ | Zustand state management |
@@ -62,12 +57,9 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | File | Command | When to use |
 |------|---------|-------------|
 | backend/main.py | `uvicorn backend.main:app --reload` | Start FastAPI backend server |
-| frontend/src/main.tsx | `npm run dev` (in frontend/) | Start React development server |
 | run_scanners.py | `python run_scanners.py` | Run weather and BTC scanners independently |
 | run_logs.py | `python run_logs.py` | Run colored log viewer with filtering |
-| start.bat | `start.bat` | Launch all 4 services in Windows Terminal tabs |
-| stop.bat | `stop.bat` | Stop all platform services |
-| docker-compose.yml | `docker-compose up` | Run full stack in containers |
+| test_core_components.py | `python test_core_components.py` | Test core trading infrastructure |
 
 ## File Tree
 
@@ -92,13 +84,18 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | test_core_components.py | Core trading infrastructure component test suite |
 | backend/api/__init__.py | API module exports |
 | backend/api/routes.py | REST API endpoint handlers |
+| backend/api/schemas.py | API request/response schemas |
 | backend/api/websocket.py | WebSocket connection manager |
+| backend/api/websocket_routes.py | WebSocket route handlers |
 | backend/database/__init__.py | Database module exports |
 | backend/database/connection.py | SQLite async connection manager |
 | backend/database/schema.sql | Table definitions for paper trading |
 | backend/logging_config.py | Thread-safe logging with QueueHandler pattern |
 | backend/models/__init__.py | Models module exports |
+| backend/models/kalshi_models.py | Kalshi API data models with validation |
+| backend/models/nws_models.py | Weather forecast and location models |
 | backend/models/schemas.py | Pydantic request models |
+| backend/models/types.py | TypedDict and Enum definitions |
 | backend/services/__init__.py | Services module exports all classes |
 | backend/services/arbitrage_calculator.py | Three-strategy arbitrage calculator for mutually exclusive brackets |
 | backend/services/arbitrage_detector.py | Finds profitable arbitrage opportunities |
@@ -131,47 +128,36 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/services/core/alert_service.py | Real-time alerts via WebSocket |
 | backend/services/core/strategy_orchestrator.py | Main trading engine coordinating all strategies |
 | backend/services/core/backtest_engine.py | Historical strategy backtesting engine |
+| backend/services/analysis/__init__.py | Analysis module exports |
+| backend/services/analysis/arbitrage_calculator.py | Enhanced arbitrage calculator with fee handling |
+| backend/services/analysis/fee_calculator.py | Advanced fee calculation engine |
+| backend/services/analysis/position_calculator.py | Position sizing and portfolio calculations |
+| backend/services/analysis/probability_engine.py | Weather probability modeling engine |
+| backend/services/execution/__init__.py | Execution module exports |
+| backend/services/execution/atomic_executor.py | Atomic multi-leg order execution |
+| backend/services/execution/order_manager.py | Order lifecycle management |
+| backend/services/execution/validator.py | Trade validation and safety checks |
+| backend/services/risk/__init__.py | Risk module exports |
+| backend/services/risk/circuit_breaker.py | Enhanced circuit breaker with multiple triggers |
+| backend/services/risk/risk_monitor.py | Real-time risk monitoring service |
+| backend/services/websocket/__init__.py | WebSocket module exports |
+| backend/services/websocket/data_sync.py | Real-time data synchronization |
+| backend/services/websocket/manager.py | WebSocket connection management |
+| backend/services/websocket/orderbook_builder.py | Live orderbook construction |
+| backend/tests/__init__.py | Test module exports |
+| backend/tests/test_analysis.py | Analysis component unit tests |
+| backend/tests/test_integration.py | Integration test suite |
+| backend/tests/test_models.py | Data model unit tests |
+| backend/tests/test_websocket.py | WebSocket functionality tests |
 | backend/utils/__init__.py | Utils module exports |
 | backend/utils/kalshi_auth.py | RSA-PSS signature authentication |
 | backend/utils/logger.py | Logging system with activity buffer |
-| keys/kalshi-private-key.pem | RSA private key for Kalshi |
-| frontend/index.html | Main HTML template |
-| frontend/package.json | NPM dependencies and scripts |
-| frontend/package-lock.json | NPM dependency lock file |
 | frontend/postcss.config.js | PostCSS config for Tailwind |
 | frontend/tailwind.config.js | Tailwind CSS configuration |
-| frontend/tsconfig.json | TypeScript compiler options |
-| frontend/tsconfig.node.json | Node TypeScript config |
 | frontend/vite.config.ts | Vite bundler configuration |
-| frontend/src/App.tsx | Root React component with arbitrage hub navigation |
-| frontend/src/index.css | Global Tailwind CSS styles |
-| frontend/src/main.tsx | React DOM entry point |
 | frontend/src/vite-env.d.ts | Vite type definitions |
-| frontend/src/components/analytics/AnalyticsTab.tsx | P&L summary dashboard |
-| frontend/src/components/arbitrage/ArbitrageAnalysisBox.tsx | Three-strategy arbitrage analysis display component |
-| frontend/src/components/arbitrage/ArbitrageHub.tsx | Main arbitrage hub with sub-navigation |
-| frontend/src/components/arbitrage/CryptoArbitrageSection.tsx | Crypto arbitrage scanner with card-based UI |
-| frontend/src/components/arbitrage/WeatherArbitrageSection.tsx | Weather arbitrage scanner with bracket sorting and forecast highlighting |
-| frontend/src/components/arbitrage/shared/StatsBar.tsx | Reusable statistics display component |
-| frontend/src/components/arbitrage/shared/ConfigPanel.tsx | Reusable configuration controls component |
-| frontend/src/components/arbitrage/shared/OpportunityTable.tsx | Reusable opportunity table component |
-| frontend/src/components/common/Modal.tsx | Reusable modal dialog |
-| frontend/src/components/layout/Header.tsx | App header with balance |
-| frontend/src/components/layout/TabNav.tsx | Tab navigation component |
-| frontend/src/components/opportunities/ExecuteModal.tsx | Trade execution confirmation modal |
-| frontend/src/components/opportunities/OpportunitiesTab.tsx | Arbitrage opportunities list |
-| frontend/src/components/opportunities/OpportunityCard.tsx | Single opportunity display |
-| frontend/src/components/portfolio/PortfolioTab.tsx | Portfolio overview with positions and orders |
-| frontend/src/components/trade/TradeCard.tsx | Manual trading market card interface |
-| frontend/src/components/trade/TradeTab.tsx | Manual trading tab wrapper |
-| frontend/src/components/trading/ModeBanner.tsx | Paper/live mode status banner |
-| frontend/src/components/trading/ModeToggle.tsx | Paper/live mode switcher |
-| frontend/src/components/trading/PositionList.tsx | Open positions display |
-| frontend/src/components/trading/TradeHistory.tsx | Historical trades list |
-| frontend/src/components/trading/TradingTab.tsx | Trading dashboard view |
-| frontend/src/components/watchlist/WatchlistTab.tsx | Saved markets with live prices |
-| frontend/src/components/autotrader/AutoTraderTab.tsx | Auto-trading control panel and signal monitoring |
-| frontend/src/components/btcarb/BTCArbitrageTab.tsx | BTC arbitrage monitoring with near-misses table and opportunity tracking |
+| frontend/src/components/arbitrage/hooks/useArbitrage.ts | Arbitrage data fetching and state management |
+| frontend/src/components/arbitrage/index.ts | Arbitrage component exports |
 | frontend/src/hooks/useSpotPrice.ts | Live BTC price polling hook |
 | frontend/src/services/api.ts | Backend HTTP API client |
 | frontend/src/stores/opportunityStore.ts | Opportunities Zustand store |
@@ -179,3 +165,6 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/src/types/index.ts | TypeScript interfaces |
 | frontend/src/types/weather.ts | Weather arbitrage type definitions |
 | frontend/src/utils/format.ts | Currency and time formatters |
+| run_logs.py | Log viewer entry point |
+| run_scanners.py | Scanner service entry point |
+| test_core_components.py | Core trading infrastructure component test suite |

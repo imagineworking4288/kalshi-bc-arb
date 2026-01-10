@@ -134,6 +134,58 @@ Pydantic request/response models
 | ExecuteRequest | opportunity_id: str, num_contracts: int | Request body for execute arbitrage endpoint |
 | ResetRequest | starting_balance: Optional[float] | Request body for paper account reset |
 
+### kalshi_models.py
+Kalshi API data models with validation and business logic
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| OrderbookLevelModel | price_cents: int, quantity: int | - | Single orderbook level with price validation |
+| Orderbook | ticker: str, yes_bids: List, no_bids: List | - | Complete orderbook with bid/ask calculation |
+| Orderbook.yes_ask | - | Optional[int] | Price to buy YES (100 - best NO bid) |
+| Orderbook.no_ask | - | Optional[int] | Price to buy NO (100 - best YES bid) |
+| Orderbook.take_yes_cost | quantity: int | Dict | Calculate cost for YES quantity with multi-level fills |
+| Orderbook.take_no_cost | quantity: int | Dict | Calculate cost for NO quantity with multi-level fills |
+| Market | ticker: str, event_ticker: str, title: str, status: MarketStatus | - | Complete market data with 50+ validated fields |
+| Market.bracket_label | - | str | Human-readable bracket description (e.g., "62-63°F") |
+| Market.is_near_settlement | threshold_hours: float = 2.0 | bool | Check if market closes within threshold |
+| Market.is_stale | max_age_seconds: float = 30.0 | bool | Check if market data is too old |
+| Event | event_ticker: str, series_ticker: str, markets: List[Market] | - | Event with nested markets for arbitrage |
+| Event.total_yes_cost | - | Optional[int] | Sum of all YES asks for arbitrage detection |
+| Event.has_arbitrage_opportunity | - | bool | Quick check if sum < 100 cents |
+| Position | ticker: str, position: int, total_cost_cents: int | - | User position with P&L calculations |
+| Position.unrealized_pnl | current_price_cents: int | int | Calculate current unrealized P&L |
+| Order | ticker: str, side: OrderSide, action: OrderAction | - | Order model with API payload conversion |
+| Order.to_api_payload | - | dict | Convert to Kalshi API request format |
+
+### nws_models.py
+Weather forecast and location models
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| ForecastPeriod | number: int, name: str, temperature: int | - | Single NWS forecast period |
+| HourlyForecast | valid_time: datetime, temperature: int | - | Hourly temperature forecast point |
+| NWSForecast | city: str, forecast_high: int, weather_pattern: WeatherPattern | - | Complete NWS forecast with uncertainty |
+| NWSForecast.forecast_std_dev | - | float | Estimate standard deviation by weather pattern (1.5-5.0°F) |
+| NWSForecast.max_hourly_temp | - | Optional[int] | Maximum temperature from hourly forecasts |
+| NWSForecast.is_stale | max_age_hours: float = 1.0 | bool | Check if forecast data is too old |
+| LocationConfig | city: str, series_ticker: str, latitude: float, longitude: float | - | Weather market location configuration |
+| KALSHI_LOCATIONS | - | Dict[str, LocationConfig] | Pre-configured locations (NYC, CHI, MIA, AUS, LAX, DEN) |
+
+### types.py
+TypedDict definitions and enums for inter-component communication
+
+| Type/Enum | Values/Fields | Description |
+|-----------|---------------|-------------|
+| MarketStatus | INITIALIZED, UNOPENED, OPEN, PAUSED, CLOSED, SETTLED | Market lifecycle states |
+| OrderSide | YES, NO | Order side enumeration |
+| OrderAction | BUY, SELL | Order action enumeration |
+| ArbitrageStrategy | ALL_YES, ALL_NO, HYBRID, MIN_2_NO | Arbitrage strategy types |
+| WeatherPattern | STABLE, TRANSITIONAL, STORMY, FRONTAL | Weather pattern for uncertainty |
+| MarketSnapshot | ticker, event_ticker, status, prices, strikes | Market data snapshot |
+| ArbitrageRecommendation | event_ticker, strategy, legs, costs, profit | Complete arbitrage recommendation |
+| ExecutionResult | success, orders_filled, total_cost, slippage | Trade execution result |
+| CircuitBreakerStatus | can_trade, reason, daily_pnl, consecutive_losses | Risk circuit breaker status |
+
 ---
 
 ## backend/services/

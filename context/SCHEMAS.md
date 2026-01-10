@@ -232,6 +232,104 @@
 
 ---
 
+## Data Models
+
+### Market (backend/models/kalshi_models.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ticker | str | Market identifier (e.g., "KXHIGHNY-24DEC31-62-63") |
+| event_ticker | str | Event identifier |
+| title | str | Market title text |
+| status | MarketStatus | Market status (OPEN, CLOSED, SETTLED, etc.) |
+| yes_bid | Optional[int] | Best YES bid price in cents (1-99) |
+| yes_ask | Optional[int] | Best YES ask price in cents |
+| no_bid | Optional[int] | Best NO bid price in cents |
+| no_ask | Optional[int] | Best NO ask price in cents |
+| floor_strike | Optional[int] | Lower temperature bound (integer degrees F) |
+| cap_strike | Optional[int] | Upper temperature bound (integer degrees F) |
+| volume_24h | int | 24-hour trading volume |
+| open_interest | int | Total open contracts |
+| close_time | Optional[datetime] | Market settlement time (UTC) |
+| fetched_at | datetime | When market data was retrieved |
+
+### Orderbook (backend/models/kalshi_models.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ticker | str | Market identifier |
+| yes_bids | List[OrderbookLevelModel] | YES bid levels |
+| no_bids | List[OrderbookLevelModel] | NO bid levels |
+| sequence | int | Orderbook sequence number |
+| timestamp | datetime | Orderbook timestamp |
+
+### Event (backend/models/kalshi_models.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| event_ticker | str | Event identifier |
+| series_ticker | str | Series identifier |
+| title | str | Event title |
+| mutually_exclusive | bool | Whether exactly one market can win |
+| markets | List[Market] | All markets in this event |
+
+### Position (backend/models/kalshi_models.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ticker | str | Market ticker |
+| position | int | Positive for YES, negative for NO |
+| total_cost_cents | int | Total cost paid |
+| avg_cost_cents | float | Average cost per contract |
+| realized_pnl_cents | int | Realized profit/loss |
+| fees_paid_cents | int | Total fees paid |
+
+### Order (backend/models/kalshi_models.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ticker | str | Market ticker |
+| side | OrderSide | YES or NO |
+| action | OrderAction | BUY or SELL |
+| count | int | Number of contracts |
+| price_cents | int | Order price in cents (1-99) |
+| status | Optional[str] | Order status |
+
+### NWSForecast (backend/models/nws_models.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| city | str | City name |
+| station_id | str | NWS station ID (e.g., "KNYC") |
+| grid_id | str | Weather forecast office code |
+| grid_x | int | Grid X coordinate |
+| grid_y | int | Grid Y coordinate |
+| forecast_high | int | Predicted high temperature (F) |
+| forecast_low | int | Predicted low temperature (F) |
+| weather_pattern | WeatherPattern | STABLE, TRANSITIONAL, STORMY, FRONTAL |
+| confidence_level | float | Forecast confidence (0.0-1.0) |
+| hourly_forecasts | List[HourlyForecast] | Hourly temperature data |
+| generated_at | datetime | When forecast was issued |
+| fetched_at | datetime | When forecast was retrieved |
+
+### LocationConfig (backend/models/nws_models.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| city | str | City name |
+| series_ticker | str | Kalshi series (e.g., "KXHIGHNY") |
+| station_id | str | NWS station identifier |
+| wfo | str | Weather forecast office |
+| grid_x | int | NWS grid X coordinate |
+| grid_y | int | NWS grid Y coordinate |
+| latitude | float | Location latitude |
+| longitude | float | Location longitude |
+| timezone | str | Timezone string (e.g., "America/New_York") |
+| typical_std_dev | float | Historical forecast standard deviation |
+| settlement_hour | int | Hour when CLI data is generated (23) |
+
+---
+
 ## Service Data Classes
 
 ### SpotPrice (backend/services/spot_price_client.py)

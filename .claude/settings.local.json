@@ -53,7 +53,13 @@
       "Bash(comm:*)",
       "Bash(if [ -f .env.example ])",
       "Bash(then cat .env.example)",
-      "Bash(else echo \"No .env.example found\")"
+      "Bash(else echo \"No .env.example found\")",
+      "Bash(tree:*)",
+      "Bash(dir /s \"c:\\\\Projects\\\\kalshi-bc-arb\\\\frontend\\\\src\\\\components\\\\arbitrage\")",
+      "Bash(pip show:*)",
+      "Bash(pip install:*)",
+      "Bash(timeout 30 python -m pytest:*)",
+      "Bash(timeout 20 python -m pytest:*)"
     ]
   }
 }

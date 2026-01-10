@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from .api.routes import router
 from .api.websocket import websocket_endpoint
+from .api.websocket_routes import router as ws_router
 from .database.connection import db
 from .config import get_settings
 
@@ -138,7 +139,10 @@ app.add_middleware(
 # Routes
 app.include_router(router, prefix="/api")
 
-# WebSocket
+# WebSocket routes (advanced features: subscriptions, broadcasts)
+app.include_router(ws_router, prefix="/api")
+
+# Legacy WebSocket (backward compatibility)
 app.websocket("/ws")(websocket_endpoint)
 
 
@@ -150,4 +154,4 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
