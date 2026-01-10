@@ -50,7 +50,10 @@
       "Bash(npx tsc:*)",
       "Bash(for file in arbitrage_calculator.py auto_trader.py edge_detector.py portfolio_service.py scanner_db.py spot_price_client.py watchlist_service.py)",
       "Bash(if [ -f \"$file\" ])",
-      "Bash(comm:*)"
+      "Bash(comm:*)",
+      "Bash(if [ -f .env.example ])",
+      "Bash(then cat .env.example)",
+      "Bash(else echo \"No .env.example found\")"
     ]
   }
 }
