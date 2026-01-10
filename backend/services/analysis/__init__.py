@@ -27,6 +27,16 @@ from .probability_engine import (
     estimate_from_dict,
 )
 
+from .prediction_engine_v2 import (
+    PredictionEngineV2,
+    BracketAnalysis,
+    PredictionResult,
+    PositionInfo,
+    RecommendationAction,
+    get_engine as get_prediction_engine,
+    analyze_brackets,
+)
+
 from .position_calculator import (
     PositionCalculator,
     Position,
@@ -56,7 +66,7 @@ __all__ = [
     'calculate_fee',
     'calculate_multi_leg_fee',
 
-    # Probability
+    # Probability (v1)
     'ProbabilityEngine',
     'BracketProbability',
     'ProbabilityEstimate',
@@ -65,6 +75,15 @@ __all__ = [
     'WeatherPattern',
     'estimate_probabilities',
     'estimate_from_dict',
+
+    # Prediction Engine (v2 - fee-aware)
+    'PredictionEngineV2',
+    'BracketAnalysis',
+    'PredictionResult',
+    'PositionInfo',
+    'RecommendationAction',
+    'get_prediction_engine',
+    'analyze_brackets',
 
     # Position
     'PositionCalculator',

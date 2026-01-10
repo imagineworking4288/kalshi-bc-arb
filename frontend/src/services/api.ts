@@ -158,4 +158,90 @@ export const api = {
 
   // Weather Arbitrage
   getWeatherStatus: () => fetchJson<any>('/weather-arb/status'),
+
+  // Predictions API
+  getSupportedCities: () =>
+    fetchJson<{
+      cities: Array<{
+        code: string;
+        latitude: number;
+        longitude: number;
+        timezone: string;
+      }>;
+    }>('/predictions/cities'),
+
+  getPredictions: (city: string, forceRefresh = false) =>
+    fetchJson<{
+      city: string;
+      event_ticker: string;
+      forecast: {
+        city: string;
+        forecast_high: number;
+        forecast_low: number;
+        weather_pattern: string;
+        short_forecast: string;
+        source: string;
+        fetched_at: string;
+        cached: boolean;
+        cache_age_seconds: number;
+      };
+      brackets: Array<{
+        ticker: string;
+        label: string;
+        model_probability: number;
+        market_implied_probability: number;
+        probability_edge: number;
+        yes_price_cents: number | null;
+        no_price_cents: number | null;
+        yes_ev_after_fee: number;
+        no_ev_after_fee: number;
+        recommended_action: string;
+        recommended_side: string | null;
+        recommended_contracts: number;
+        kelly_fraction: number;
+        has_existing_position: boolean;
+        position_conflict: boolean;
+        confidence: number;
+      }>;
+      total_probability: number;
+      has_opportunities: boolean;
+      best_opportunity: any | null;
+      warnings: string[];
+      generated_at: string;
+    }>(`/predictions/${city}?force_refresh=${forceRefresh}`),
+
+  getForecast: (city: string, forceRefresh = false) =>
+    fetchJson<{
+      city: string;
+      forecast_high: number;
+      forecast_low: number;
+      weather_pattern: string;
+      short_forecast: string;
+      source: string;
+      fetched_at: string;
+      cached: boolean;
+      cache_age_seconds: number;
+    }>(`/predictions/${city}/forecast?force_refresh=${forceRefresh}`),
+
+  refreshForecast: (city: string) =>
+    fetchJson<{
+      success: boolean;
+      city: string;
+      source: string;
+      forecast_high: number;
+      forecast_low: number;
+    }>(`/predictions/${city}/refresh`, { method: 'POST' }),
+
+  getPredictionStatus: () =>
+    fetchJson<{
+      circuits: { nws: string; open_meteo: string };
+      supported_cities: string[];
+      cache_entries: number;
+    }>('/predictions/status'),
+
+  resetPredictionCircuits: () =>
+    fetchJson<{
+      success: boolean;
+      circuits: { nws: string; open_meteo: string };
+    }>('/predictions/reset-circuits', { method: 'POST' }),
 };

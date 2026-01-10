@@ -39,6 +39,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/services | backend/services/ | Core business logic and external integrations |
 | backend/services/core | backend/services/core/ | Unified trading infrastructure (orchestrator, signals, risk, etc.) |
 | backend/services/analysis | backend/services/analysis/ | Analysis tools and probability calculators |
+| backend/services/nws | backend/services/nws/ | National Weather Service API client and configuration |
 | backend/services/execution | backend/services/execution/ | Order execution and validation components |
 | backend/services/risk | backend/services/risk/ | Risk management and monitoring |
 | backend/services/websocket | backend/services/websocket/ | WebSocket data synchronization |
@@ -114,6 +115,9 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/services/log_config.py | Centralized logging with colored output |
 | backend/services/log_viewer.py | Real-time log viewer with filtering |
 | backend/services/nws_client.py | National Weather Service API client |
+| backend/services/nws/__init__.py | NWS module exports |
+| backend/services/nws/client.py | Production NWS client with Open-Meteo fallback |
+| backend/services/nws/config.py | NWS grid points and cache configuration |
 | backend/services/scanner_db.py | SQLite database for scanner results |
 | backend/services/scanner_service.py | Unified scanner service runner |
 | backend/services/weather_arb_scanner.py | Weather arbitrage scanner for 14 series |
@@ -148,6 +152,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/tests/test_analysis.py | Analysis component unit tests |
 | backend/tests/test_integration.py | Integration test suite |
 | backend/tests/test_models.py | Data model unit tests |
+| backend/tests/test_prediction_engine.py | Prediction engine v2 test suite |
 | backend/tests/test_websocket.py | WebSocket functionality tests |
 | backend/utils/__init__.py | Utils module exports |
 | backend/utils/kalshi_auth.py | RSA-PSS signature authentication |
@@ -158,6 +163,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/src/vite-env.d.ts | Vite type definitions |
 | frontend/src/components/arbitrage/hooks/useArbitrage.ts | Arbitrage data fetching and state management |
 | frontend/src/components/arbitrage/index.ts | Arbitrage component exports |
+| frontend/src/hooks/usePredictions.ts | Weather prediction data fetching hook |
 | frontend/src/hooks/useSpotPrice.ts | Live BTC price polling hook |
 | frontend/src/services/api.ts | Backend HTTP API client |
 | frontend/src/stores/opportunityStore.ts | Opportunities Zustand store |

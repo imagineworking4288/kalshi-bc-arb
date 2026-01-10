@@ -97,6 +97,18 @@ HTTP REST API endpoints for opportunities and trading
 | get_alert_stats | - | dict | Get alert statistics |
 | run_backtest | request: dict | dict | Run a backtest on historical data |
 
+### prediction_routes.py
+Weather prediction and forecast API endpoints with rate limiting
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| get_supported_cities | - | dict | Get all supported cities with coordinates |
+| get_predictions | city: str, force_refresh: bool = False | dict | Get complete prediction analysis for city |
+| get_forecast | city: str, force_refresh: bool = False | dict | Get raw weather forecast for city |
+| refresh_forecast | city: str | dict | Force refresh forecast from NWS/Open-Meteo |
+| get_prediction_status | - | dict | Get circuit breaker status and cache info |
+| reset_prediction_circuits | - | dict | Reset API circuit breakers |
+
 ### websocket.py
 WebSocket connection manager for real-time updates
 
@@ -406,6 +418,32 @@ National Weather Service API client for forecast data
 | NWSClient | - | - | Client for NWS point forecast API |
 | NWSClient.get_forecast | lat: float, lon: float | List[Dict] | Get 7-day forecast for coordinates |
 
+---
+
+## backend/services/nws/
+
+### config.py
+NWS grid points configuration and cache settings
+
+| Function/Constant | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| NWS_GRID_POINTS | - | Dict[str, Tuple] | Hardcoded NWS grid coordinates for 7 cities (NYC, CHI, MIA, etc.) |
+| CACHE_CONFIG | - | Dict | Adaptive cache TTL settings based on forecast age |
+| FALLBACK_CONFIG | - | Dict | Open-Meteo API configuration for NWS fallback |
+
+### client.py
+Production NWS API client with Open-Meteo fallback and circuit breaker
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| NWSProductionClient | - | - | Production NWS client with fault tolerance |
+| NWSProductionClient.get_forecast | city: str | NWSForecast | Get forecast with NWS primary, Open-Meteo fallback |
+| NWSProductionClient._fetch_nws | city: str | Optional[NWSForecast] | Fetch from NWS API with grid point lookup |
+| NWSProductionClient._fetch_open_meteo | city: str | NWSForecast | Fetch from Open-Meteo API as fallback |
+| NWSProductionClient._determine_weather_pattern | data: dict | WeatherPattern | Classify weather pattern for uncertainty estimation |
+| NWSProductionClient.get_circuit_status | - | Dict[str, str] | Get circuit breaker status for both APIs |
+| NWSProductionClient.reset_circuits | - | None | Reset circuit breakers |
+
 ### scanner_db.py
 SQLite database for scanner results
 
@@ -436,6 +474,25 @@ Weather arbitrage scanner for 14 market series (7 cities × 2 types)
 | WeatherArbScanner.scan_once | - | Dict | Scan all 14 weather series for bracket arbitrage |
 | WeatherArbScanner.get_nws_forecast | location_config | Optional[Dict] | Get NWS forecast for location |
 | WeatherArbScanner.analyze_series | series_ticker, forecast_temp | Dict | Analyze single weather series for opportunities |
+
+---
+
+## backend/services/analysis/
+
+### prediction_engine_v2.py
+Enhanced weather prediction engine with fee-aware analysis and position awareness
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| PredictionEngineV2 | min_edge=0.05, kelly_fraction=0.25, bankroll_cents=100000 | - | Initialize with risk parameters |
+| PredictionEngineV2.analyze_brackets | brackets, forecast_high, forecast_std_dev, positions=[], city?, event_ticker? | PredictionResult | Complete bracket analysis with recommendations |
+| PredictionEngineV2._bracket_probability | mean, std_dev, floor_strike, cap_strike | float | Calculate bracket probability using normal CDF |
+| PredictionEngineV2._calculate_fee_aware_ev | prob, price_cents, side, contracts=10 | Tuple[float, float, float] | Calculate EV before/after fees |
+| PredictionEngineV2._calculate_kelly | prob, price | float | Calculate Kelly fraction for position sizing |
+| PredictionEngineV2._check_position_conflict | ticker, recommended_side, positions | bool | Check for opposing positions |
+| PredictionEngineV2._norm_cdf | x, mean, std_dev | float | Normal cumulative distribution function |
+| BracketAnalysis | ticker, model_probability, probability_edge, recommended_action, etc. | dataclass | Single bracket analysis result |
+| PredictionResult | brackets, best_bracket, total_probability, warnings, etc. | dataclass | Complete prediction analysis result |
 
 ---
 
@@ -631,6 +688,23 @@ Historical strategy backtesting engine
 
 ---
 
+## backend/tests/
+
+### test_prediction_engine.py
+Comprehensive test suite for prediction engine v2
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| TestProbabilityCalculations | - | - | Test probability calculations using normal distribution CDF |
+| TestFeeAwareEV | - | - | Test fee-aware expected value calculations |
+| TestPositionAwareness | - | - | Test position conflict detection |
+| TestKellySizing | - | - | Test Kelly criterion position sizing |
+| TestEdgeThreshold | - | - | Test minimum edge threshold requirements |
+| TestAnalyzeBrackets | - | - | Test main analyze_brackets method |
+| TestNormCDF | - | - | Test normal CDF implementation |
+
+---
+
 ## backend/config/
 
 ### __init__.py
@@ -713,6 +787,14 @@ Root application component with arbitrage hub navigation
 ---
 
 ## frontend/src/hooks/
+
+### usePredictions.ts
+Weather prediction data fetching hook with auto-refresh
+
+| Function/Type | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| UsePredictionsResult | data, loading, error, lastUpdated, refresh | interface | Hook return type |
+| usePredictions | city: string | UsePredictionsResult | Fetch predictions with 5-minute auto-refresh |
 
 ### useSpotPrice.ts
 Live BTC spot price polling with source attribution

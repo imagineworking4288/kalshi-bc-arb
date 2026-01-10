@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from .api.routes import router
 from .api.websocket import websocket_endpoint
 from .api.websocket_routes import router as ws_router
+from .api.prediction_routes import router as prediction_router
 from .database.connection import db
 from .config import get_settings
 
@@ -138,6 +139,9 @@ app.add_middleware(
 
 # Routes
 app.include_router(router, prefix="/api")
+
+# Prediction routes (weather forecasting and bracket analysis)
+app.include_router(prediction_router, prefix="/api")
 
 # WebSocket routes (advanced features: subscriptions, broadcasts)
 app.include_router(ws_router, prefix="/api")
