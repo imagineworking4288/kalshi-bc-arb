@@ -181,6 +181,7 @@
 | settlement_outcome | TEXT | Settlement result description |
 | actual_payout_cents | INTEGER | Actual payout received |
 | actual_profit_cents | INTEGER | Actual profit after settlement |
+| audit_id | TEXT | Execution audit trail ID (added in migration 001) |
 
 ### btc_arb_config
 
@@ -194,6 +195,42 @@
 | max_position_per_opp_cents | INTEGER | Maximum position size per opportunity |
 | mode | TEXT | Trading mode: 'paper' or 'live' |
 | updated_at | TIMESTAMP | Last configuration update |
+
+### execution_audit
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | TEXT PRIMARY KEY | UUID execution audit identifier |
+| request_id | TEXT UNIQUE | UUID request identifier |
+| created_at | TIMESTAMP | Execution timestamp (default: CURRENT_TIMESTAMP) |
+| source | TEXT | Request source: 'orchestrator', 'manual', 'auto_trader', 'btc_arb', 'strategy' |
+| signal_id | TEXT | Associated trading signal ID (optional) |
+| mode | TEXT | Execution mode: 'paper', 'live', 'dual' |
+| legs_json | TEXT | JSON array of execution legs |
+| atomic | INTEGER | Atomic execution flag (default: 1) |
+| max_slippage_cents | INTEGER | Maximum allowed slippage in cents |
+| success | INTEGER | Overall execution success flag |
+| total_cost_cents | INTEGER | Total cost across all legs |
+| total_fees_cents | INTEGER | Total fees across all legs |
+| execution_time_ms | INTEGER | Execution duration in milliseconds |
+| leg_results_json | TEXT | JSON array of leg execution results |
+| error | TEXT | Error message if execution failed |
+
+### circuit_breaker_state (Updated Schema)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | INTEGER PRIMARY KEY | Always 1, single row table |
+| tripped | INTEGER | Circuit breaker status: 0=active, 1=tripped (default: 0) |
+| trip_reason | TEXT | Reason for circuit breaker trip |
+| trip_time | TIMESTAMP | When circuit breaker was tripped |
+| permanent | INTEGER | Permanent trip flag: 0=temporary, 1=permanent (default: 0) |
+| consecutive_losses | INTEGER | Count of consecutive losses (default: 0) |
+| daily_loss_cents | INTEGER | Daily loss amount in cents (default: 0) |
+| hourly_trades_json | TEXT | JSON tracking hourly trade counts |
+| hourly_exposure_json | TEXT | JSON tracking hourly exposure limits |
+| last_reset_date | TEXT | Date of last daily reset |
+| updated_at | TIMESTAMP | Last update timestamp (default: CURRENT_TIMESTAMP) |
 
 ---
 
@@ -229,6 +266,62 @@
 |-------|------|-------------|
 | ticker | str | Kalshi market ticker to add |
 | notes | Optional[str] | Optional user notes about the market |
+
+### ExecutionLeg (backend/models/execution_models.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ticker | str | Kalshi market ticker |
+| side | 'yes' \| 'no' | Position side |
+| action | 'buy' \| 'sell' | Order action |
+| contracts | int | Number of contracts (must be positive) |
+| price_cents | int | Price in cents (1-99) |
+| price_type | 'limit' \| 'market' | Order price type (default: limit) |
+
+### ExecutionRequest (backend/models/execution_models.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| request_id | str | UUID request identifier (auto-generated) |
+| source | 'orchestrator' \| 'manual' \| 'auto_trader' \| 'btc_arb' \| 'strategy' | Request source |
+| signal_id | Optional[str] | Associated trading signal ID |
+| mode | 'paper' \| 'live' \| 'dual' | Execution mode |
+| legs | List[ExecutionLeg] | Trade legs to execute (minimum 1) |
+| atomic | bool | Whether all legs must succeed (default: True) |
+| max_slippage_cents | int | Maximum allowed slippage in cents (default: 2) |
+| timeout_seconds | float | Request timeout in seconds (default: 30.0) |
+
+### LegResult (backend/models/execution_models.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ticker | str | Market ticker |
+| side | 'yes' \| 'no' | Position side |
+| action | 'buy' \| 'sell' | Order action |
+| requested_contracts | int | Contracts requested |
+| filled_contracts | int | Contracts filled |
+| requested_price_cents | int | Price requested in cents |
+| fill_price_cents | Optional[int] | Actual fill price in cents |
+| fee_cents | int | Fees charged (default: 0) |
+| status | 'filled' \| 'partial' \| 'failed' \| 'cancelled' | Execution status |
+| order_id | Optional[str] | Kalshi order ID |
+| error | Optional[str] | Error message if failed |
+| slippage_cents | int | Price slippage in cents (default: 0) |
+
+### ExecutionResult (backend/models/execution_models.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| request_id | str | UUID request identifier |
+| success | bool | Overall execution success |
+| mode | 'paper' \| 'live' \| 'dual' | Execution mode |
+| legs | List[LegResult] | Results for each leg |
+| total_cost_cents | int | Total cost across all legs |
+| total_fees_cents | int | Total fees across all legs |
+| execution_time_ms | int | Execution duration in milliseconds |
+| audit_id | str | Execution audit trail ID |
+| created_at | datetime | Result creation timestamp (auto-generated) |
+| error | Optional[str] | Error message if failed |
 
 ---
 

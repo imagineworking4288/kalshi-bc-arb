@@ -62,11 +62,20 @@ from .alert_service import (
 
 from .strategy_orchestrator import StrategyOrchestrator
 
+from .execution_gateway import ExecutionGateway, GatewayConfig
+
 from .backtest_engine import (
     BacktestConfig,
     BacktestTrade,
     BacktestResult,
     BacktestEngine
+)
+
+from .fee_calculator import (
+    FeeType,
+    FeeCalculation,
+    FeeCalculator,
+    calculate_fee
 )
 
 __all__ = [
@@ -116,9 +125,18 @@ __all__ = [
     # Main orchestrator
     "StrategyOrchestrator",
 
+    # Execution gateway
+    "ExecutionGateway",
+
     # Backtesting
     "BacktestConfig",
     "BacktestTrade",
     "BacktestResult",
-    "BacktestEngine"
+    "BacktestEngine",
+
+    # Fee calculation
+    "FeeType",
+    "FeeCalculation",
+    "FeeCalculator",
+    "calculate_fee"
 ]

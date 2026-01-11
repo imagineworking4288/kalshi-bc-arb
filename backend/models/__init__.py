@@ -20,7 +20,6 @@ from .types import (
     ArbitrageLeg,
     ArbitrageRecommendation,
     ValidationResult,
-    ExecutionResult,
     CircuitBreakerStatus,
 )
 
@@ -43,6 +42,13 @@ from .nws_models import (
     KALSHI_LOCATIONS,
 )
 
+from .execution_models import (
+    ExecutionLeg,
+    ExecutionRequest,
+    LegResult,
+    ExecutionResult,
+)
+
 __all__ = [
     # Enums
     'MarketStatus',
@@ -61,7 +67,6 @@ __all__ = [
     'ArbitrageLeg',
     'ArbitrageRecommendation',
     'ValidationResult',
-    'ExecutionResult',
     'CircuitBreakerStatus',
 
     # Pydantic Models
@@ -76,6 +81,12 @@ __all__ = [
     'NWSForecast',
     'ClimatologyData',
     'LocationConfig',
+
+    # Execution Models
+    'ExecutionLeg',
+    'ExecutionRequest',
+    'LegResult',
+    'ExecutionResult',
 
     # Constants
     'KALSHI_LOCATIONS',

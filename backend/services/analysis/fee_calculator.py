@@ -1,6 +1,10 @@
 """
 Accurate fee calculations for Kalshi trading.
 
+DEPRECATED: This module is deprecated. Use backend.services.core.fee_calculator instead.
+
+    from backend.services.core import FeeCalculator, FeeType, FeeCalculation
+
 CRITICAL: Fee calculation errors of 15-20% are common with naive approaches.
 This implementation handles:
 - Non-linear fee formula (per-leg, not average)
@@ -8,6 +12,15 @@ This implementation handles:
 - Fee cap at ~1.74% of notional
 - Subpenny pricing
 """
+
+import warnings
+
+warnings.warn(
+    "backend.services.analysis.fee_calculator is deprecated. "
+    "Use backend.services.core.fee_calculator instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 from typing import List, Optional
 from dataclasses import dataclass

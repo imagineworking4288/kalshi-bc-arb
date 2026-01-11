@@ -22,6 +22,7 @@ from ..services.watchlist_service import WatchlistService
 from ..services.scanner_db import ScannerDatabase
 from ..services.log_config import LOG_DIR, MAIN_LOG
 from ..services.fee_calculator import FeeCalculator, OrderType
+from ..services.core import ExecutionGateway
 
 router = APIRouter()
 
@@ -38,6 +39,14 @@ scanner_db = ScannerDatabase()
 
 # Cache for opportunities
 _opp_cache: dict = {}
+
+
+def get_gateway(request: Request) -> ExecutionGateway:
+    """Get ExecutionGateway from app.state, fallback to creating one."""
+    if hasattr(request.app.state, 'gateway') and request.app.state.gateway:
+        return request.app.state.gateway
+    # Fallback: create a gateway (for backwards compatibility)
+    return ExecutionGateway(kalshi, paper, db)
 
 
 # ============== CONFIG ==============
@@ -213,27 +222,60 @@ async def get_positions():
 
 
 @router.post("/execute")
-async def execute_arbitrage(request: ExecuteRequest):
+async def execute_arbitrage(request: ExecuteRequest, req: Request):
+    """Execute arbitrage trade through ExecutionGateway."""
     opp = _opp_cache.get(request.opportunity_id)
     if not opp:
         raise HTTPException(404, "Opportunity not found. Refresh opportunities list.")
 
-    result = await executor.execute_arbitrage(opp, request.num_contracts)
+    gateway = get_gateway(req)
+
+    # Build legs from opportunity brackets
+    legs = [
+        {
+            'ticker': bracket.ticker,
+            'side': 'yes',
+            'action': 'buy',
+            'price_cents': int(bracket.yes_price * 100)
+        }
+        for bracket in opp.brackets
+    ]
+
+    # Determine mode
+    settings = get_settings()
+    mode = 'paper' if settings.paper_trading_mode else 'live'
+
+    result = await gateway.execute_arbitrage_v2(
+        legs=legs,
+        contracts_per_leg=request.num_contracts,
+        mode=mode,
+        source='manual'
+    )
+
+    # Calculate expected values
+    total_filled = sum(leg.filled_contracts for leg in result.legs)
+    contracts_per_leg = request.num_contracts
+    expected_payout = (total_filled / len(result.legs)) * 100 if result.legs else 0
+    expected_profit = expected_payout - (result.total_cost_cents / 100) - (result.total_fees_cents / 100)
 
     return {
-        "trade_id": result.trade_id,
-        "status": result.status,
-        "total_cost": result.total_cost,
-        "total_fees": result.total_fees,
-        "expected_payout": result.expected_payout,
-        "expected_profit": result.expected_profit,
-        "expected_profit_pct": getattr(result, 'expected_profit_pct', 0),
+        "trade_id": result.audit_id,
+        "status": "success" if result.success else "failed",
+        "total_cost": result.total_cost_cents / 100,
+        "total_fees": result.total_fees_cents / 100,
+        "expected_payout": expected_payout,
+        "expected_profit": expected_profit,
+        "expected_profit_pct": (expected_profit / (result.total_cost_cents / 100) * 100) if result.total_cost_cents > 0 else 0,
         "message": result.message,
-        "paper_mode": result.paper_mode,
+        "paper_mode": mode == 'paper',
         "orders": [
-            {"ticker": o.ticker, "contracts": o.contracts, "price": o.fill_price, "fee": o.fee}
-            if hasattr(o, 'ticker') else o
-            for o in result.orders
+            {
+                "ticker": leg.ticker,
+                "contracts": leg.filled_contracts,
+                "price": (leg.fill_price or leg.price_cents) / 100,
+                "fee": leg.fee_cents / 100
+            }
+            for leg in result.legs
         ]
     }
 
@@ -265,177 +307,68 @@ async def settle_position(position_id: str, won: bool = True):
 # ============== MANUAL TRADING ==============
 
 @router.post("/trade/place")
-async def place_trade(request: TradeRequest):
+async def place_trade(request: TradeRequest, req: Request):
     """
-    Place a manual trade in paper mode, live mode, or both simultaneously.
-    """
-    import uuid
-    from ..database.connection import db
-    from ..services.fee_calculator import calculate_fee
+    Place a manual trade through ExecutionGateway.
 
+    Supports paper, live, or dual (both) modes.
+    """
+    gateway = get_gateway(req)
+
+    # Determine mode from request
+    if len(request.modes) == 2:
+        mode = 'dual'
+    else:
+        mode = request.modes[0]
+
+    result = await gateway.execute_single_v2(
+        ticker=request.ticker,
+        side=request.side,
+        action=request.action,
+        contracts=request.count,
+        price_cents=request.price_cents,
+        mode=mode,
+        source='manual'
+    )
+
+    # Build response in legacy format for backwards compatibility
     results = []
 
-    for mode in request.modes:
-        order_id = str(uuid.uuid4())
-
-        try:
-            if mode == "paper":
-                # Execute paper trade
-                async with db.connection() as conn:
-                    # Get paper account balance
-                    cursor = await conn.execute("SELECT balance FROM paper_account WHERE id = 1")
-                    balance_row = await cursor.fetchone()
-
-                    if not balance_row:
-                        results.append({
-                            "mode": "paper",
-                            "order_id": order_id,
-                            "status": "failed",
-                            "error": "Paper account not initialized"
-                        })
-                        continue
-
-                    # Calculate cost
-                    price_dollars = request.price_cents / 100
-                    total_cost = request.count * price_dollars
-                    total_fees = calculate_fee(request.count, price_dollars)
-                    total_debit = total_cost + total_fees
-
-                    current_balance = balance_row[0]
-                    if current_balance < total_debit:
-                        results.append({
-                            "mode": "paper",
-                            "order_id": order_id,
-                            "status": "failed",
-                            "error": f"Insufficient balance: ${current_balance:.2f} < ${total_debit:.2f}"
-                        })
-                        continue
-
-                    # Record order
-                    now = datetime.now(timezone.utc).isoformat()
-                    await conn.execute(
-                        """INSERT INTO manual_orders
-                           (id, created_at, ticker, side, action, count, price_cents, mode, status,
-                            filled_count, avg_fill_price, total_cost, total_fees, updated_at)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (order_id, now, request.ticker, request.side, request.action, request.count,
-                         request.price_cents, "paper", "filled", request.count, price_dollars,
-                         total_cost, total_fees, now)
-                    )
-
-                    # Create position
-                    position_id = str(uuid.uuid4())
-                    await conn.execute(
-                        """INSERT INTO paper_positions
-                           (id, created_at, ticker, side, contracts, avg_price, total_cost, total_fees,
-                            settlement_time, settled, trade_id)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (position_id, now, request.ticker, request.side, request.count, price_dollars,
-                         total_cost, total_fees, datetime.now(timezone.utc).isoformat(), 0, order_id)
-                    )
-
-                    # Update balance
-                    new_balance = current_balance - total_debit
-                    await conn.execute(
-                        "UPDATE paper_account SET balance = ?, updated_at = ? WHERE id = 1",
-                        (new_balance, now)
-                    )
-
-                    await conn.commit()
-
-                    results.append({
-                        "mode": "paper",
-                        "order_id": order_id,
-                        "status": "filled",
-                        "filled_count": request.count,
-                        "avg_fill_price": price_dollars,
-                        "total_cost": total_cost,
-                        "total_fees": total_fees
-                    })
-
-            elif mode == "live":
-                # Execute live trade via Kalshi API
-                try:
-                    kalshi_result = await kalshi.place_order(
-                        ticker=request.ticker,
-                        side=request.side,
-                        action=request.action,
-                        count=request.count,
-                        price=request.price_cents
-                    )
-
-                    # Parse Kalshi response
-                    order = kalshi_result.get("order", {})
-                    kalshi_order_id = order.get("order_id")
-                    filled_count = order.get("filled_count", 0)
-                    status_map = {"resting": "pending", "filled": "filled", "canceled": "cancelled"}
-                    status = status_map.get(order.get("status", "pending"), "pending")
-
-                    # Calculate actuals
-                    fill_price = order.get("yes_price", request.price_cents) / 100
-                    actual_cost = filled_count * fill_price
-                    actual_fees = order.get("total_fee", 0) / 100
-
-                    # Record order
-                    async with db.connection() as conn:
-                        now = datetime.now(timezone.utc).isoformat()
-                        await conn.execute(
-                            """INSERT INTO manual_orders
-                               (id, created_at, ticker, side, action, count, price_cents, mode, status,
-                                filled_count, avg_fill_price, total_cost, total_fees, kalshi_order_id, updated_at)
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                            (order_id, now, request.ticker, request.side, request.action, request.count,
-                             request.price_cents, "live", status, filled_count, fill_price,
-                             actual_cost, actual_fees, kalshi_order_id, now)
-                        )
-                        await conn.commit()
-
-                    results.append({
-                        "mode": "live",
-                        "order_id": order_id,
-                        "kalshi_order_id": kalshi_order_id,
-                        "status": status,
-                        "filled_count": filled_count,
-                        "avg_fill_price": fill_price,
-                        "total_cost": actual_cost,
-                        "total_fees": actual_fees
-                    })
-
-                except Exception as e:
-                    # Record failed live order
-                    async with db.connection() as conn:
-                        now = datetime.now(timezone.utc).isoformat()
-                        await conn.execute(
-                            """INSERT INTO manual_orders
-                               (id, created_at, ticker, side, action, count, price_cents, mode, status, error, updated_at)
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                            (order_id, now, request.ticker, request.side, request.action, request.count,
-                             request.price_cents, "live", "failed", str(e), now)
-                        )
-                        await conn.commit()
-
-                    results.append({
-                        "mode": "live",
-                        "order_id": order_id,
-                        "status": "failed",
-                        "error": str(e)
-                    })
-
-        except Exception as e:
+    if mode == 'dual':
+        # For dual mode, report both paper and live results
+        for m in ['paper', 'live']:
             results.append({
-                "mode": mode,
-                "order_id": order_id,
-                "status": "failed",
-                "error": str(e)
+                "mode": m,
+                "order_id": result.audit_id,
+                "status": "filled" if result.success else "failed",
+                "filled_count": result.legs[0].filled_contracts if result.legs else 0,
+                "avg_fill_price": (result.legs[0].fill_price or result.legs[0].price_cents) / 100 if result.legs else 0,
+                "total_cost": result.total_cost_cents / 100,
+                "total_fees": result.total_fees_cents / 100,
+                "error": result.message if not result.success else None
             })
-
-    success = all(r["status"] in ["filled", "pending"] for r in results)
-    message = f"Placed {len([r for r in results if r['status'] in ['filled', 'pending']])} of {len(results)} orders"
+    else:
+        results.append({
+            "mode": mode,
+            "order_id": result.audit_id,
+            "status": "filled" if result.success else "failed",
+            "filled_count": result.legs[0].filled_contracts if result.legs else 0,
+            "avg_fill_price": (result.legs[0].fill_price or result.legs[0].price_cents) / 100 if result.legs else 0,
+            "total_cost": result.total_cost_cents / 100,
+            "total_fees": result.total_fees_cents / 100,
+            "error": result.message if not result.success else None
+        })
 
     return {
+        "success": result.success,
+        "trade_id": result.audit_id,
+        "mode": result.mode,
+        "total_cost": result.total_cost_cents / 100,
+        "total_fees": result.total_fees_cents / 100,
+        "filled_contracts": sum(leg.filled_contracts for leg in result.legs),
+        "error": result.message if not result.success else None,
         "results": results,
-        "success": success,
-        "message": message
+        "message": f"Trade {'executed' if result.success else 'failed'} in {mode} mode"
     }
 
 
@@ -465,6 +398,82 @@ async def get_market_details(ticker: str):
         raise
     except Exception as e:
         raise HTTPException(500, f"Failed to fetch market: {str(e)}")
+
+
+# ============== EXECUTION AUDIT ==============
+
+@router.get("/executions")
+async def get_executions(
+    source: Optional[str] = None,
+    mode: Optional[str] = None,
+    limit: int = 50
+):
+    """
+    Get execution audit history.
+
+    Args:
+        source: Filter by source (e.g., "manual", "btc_arb", "weather_arb")
+        mode: Filter by mode ("paper", "live", "dual")
+        limit: Maximum number of results (default 50)
+    """
+    query = "SELECT * FROM execution_audit WHERE 1=1"
+    params = []
+
+    if source:
+        query += " AND source = ?"
+        params.append(source)
+    if mode:
+        query += " AND mode = ?"
+        params.append(mode)
+
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(limit)
+
+    try:
+        async with db.connection() as conn:
+            cursor = await conn.execute(query, params)
+            rows = await cursor.fetchall()
+            columns = [d[0] for d in cursor.description]
+            executions = [dict(zip(columns, row)) for row in rows]
+
+            return {
+                "executions": executions,
+                "count": len(executions)
+            }
+    except Exception as e:
+        # Table might not exist yet
+        return {
+            "executions": [],
+            "count": 0,
+            "error": str(e)
+        }
+
+
+@router.get("/executions/{audit_id}")
+async def get_execution(audit_id: str):
+    """
+    Get single execution by audit ID.
+
+    Args:
+        audit_id: The audit ID from execution result
+    """
+    try:
+        async with db.connection() as conn:
+            cursor = await conn.execute(
+                "SELECT * FROM execution_audit WHERE id = ?",
+                (audit_id,)
+            )
+            row = await cursor.fetchone()
+
+        if not row:
+            raise HTTPException(404, "Execution not found")
+
+        columns = [d[0] for d in cursor.description]
+        return dict(zip(columns, row))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Failed to fetch execution: {str(e)}")
 
 
 # ============== PORTFOLIO ==============

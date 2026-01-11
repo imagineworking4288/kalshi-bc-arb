@@ -1,12 +1,32 @@
+"""
+DEPRECATED: This module is deprecated. Use ExecutionGateway instead.
+
+This module will be removed in a future version. All trade execution
+should go through backend.services.core.execution_gateway.ExecutionGateway.
+
+Example migration:
+    # Old way (deprecated)
+    from backend.services.trade_executor import TradeExecutor
+    executor = TradeExecutor(kalshi_client)
+
+    # New way (recommended)
+    from backend.services.core import ExecutionGateway
+    gateway = ExecutionGateway(kalshi_client)
+"""
+
 import asyncio
 import uuid
-from typing import Union
+import warnings
+from typing import Union, Optional, TYPE_CHECKING
 from dataclasses import dataclass
 
 from ..config import get_settings
 from .kalshi_client import KalshiClient
 from .paper_trading import PaperTradingService, PaperTradeResult
 from .arbitrage_detector import ArbitrageOpportunity
+
+if TYPE_CHECKING:
+    from .core.execution_gateway import ExecutionGateway
 
 
 @dataclass
@@ -23,18 +43,39 @@ class LiveTradeResult:
 
 
 class TradeExecutor:
-    """Routes trades to paper simulation or live Kalshi based on mode"""
+    """
+    DEPRECATED: Routes trades to paper simulation or live Kalshi based on mode.
 
-    def __init__(self, kalshi_client: KalshiClient):
+    This class is deprecated. Use ExecutionGateway instead:
+
+        from backend.services.core import ExecutionGateway
+        gateway = ExecutionGateway(kalshi_client)
+    """
+
+    def __init__(
+        self,
+        kalshi_client: KalshiClient,
+        gateway: Optional['ExecutionGateway'] = None
+    ):
+        warnings.warn(
+            "TradeExecutor is deprecated. Use ExecutionGateway from "
+            "backend.services.core.execution_gateway instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.kalshi = kalshi_client
         self.paper = PaperTradingService()
         self.settings = get_settings()
+        self._gateway = gateway
 
     @property
     def is_paper_mode(self) -> bool:
         return self.settings.paper_trading_mode
 
     async def get_balance(self) -> dict:
+        if self._gateway:
+            return await self._gateway.get_balance()
+
         if self.is_paper_mode:
             return await self.paper.get_balance()
         else:
@@ -46,6 +87,9 @@ class TradeExecutor:
             }
 
     async def get_positions(self) -> list:
+        if self._gateway:
+            return await self._gateway.get_positions()
+
         if self.is_paper_mode:
             return await self.paper.get_positions()
         else:
@@ -56,6 +100,8 @@ class TradeExecutor:
         opportunity: ArbitrageOpportunity,
         num_contracts: int
     ) -> Union[PaperTradeResult, LiveTradeResult]:
+        if self._gateway:
+            return await self._gateway.execute_arbitrage(opportunity, num_contracts)
 
         if self.is_paper_mode:
             return await self.paper.execute_arbitrage(opportunity, num_contracts)
@@ -149,3 +195,24 @@ class TradeExecutor:
             expected_profit=expected_profit,
             message="Live arbitrage executed atomically" if all_filled else "Some orders failed or partially filled"
         )
+
+    @classmethod
+    def from_gateway(cls, gateway: 'ExecutionGateway') -> 'TradeExecutor':
+        """
+        Create a TradeExecutor that delegates to ExecutionGateway.
+
+        This is useful for backwards compatibility when migrating
+        code that expects a TradeExecutor instance.
+
+        Args:
+            gateway: ExecutionGateway instance to delegate to
+
+        Returns:
+            TradeExecutor instance that delegates all calls to the gateway
+        """
+        instance = object.__new__(cls)
+        instance._gateway = gateway
+        instance.kalshi = gateway.kalshi_client
+        instance.paper = gateway.paper
+        instance.settings = gateway.settings
+        return instance

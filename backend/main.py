@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import logging
 
 from .api.routes import router
 from .api.websocket import websocket_endpoint
@@ -8,6 +9,11 @@ from .api.websocket_routes import router as ws_router
 from .api.prediction_routes import router as prediction_router
 from .database.connection import db
 from .config import get_settings
+from .services.core.execution_gateway import ExecutionGateway
+from .services.core.fee_calculator import FeeCalculator
+from .services.paper_trading import PaperTradingService
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -18,14 +24,16 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     mode = "PAPER" if settings.paper_trading_mode else "LIVE"
     print("=" * 50)
-    print("Kalshi Trading Platform")
-    print(f"Trading Mode: {mode}")
-    print(f"Database: {settings.database_path}")
+    print("  Kalshi Trading Platform")
+    print("=" * 50)
+    print(f"  Mode: {mode}")
+    print(f"  API Configured: {settings.has_kalshi_credentials}")
+    print(f"  Database: {settings.database_path}")
     print("=" * 50)
 
     if not settings.paper_trading_mode:
-        print("WARNING: Live trading is enabled!")
-        print("WARNING: Real money will be used for trades!")
+        print("  WARNING: Live trading is enabled!")
+        print("  WARNING: Real money will be used for trades!")
 
     # Initialize auto-trader
     from .api import routes
@@ -56,7 +64,6 @@ async def lifespan(app: FastAPI):
             KellySizing, KellyConfig,
             RiskManager, RiskLimits,
             CircuitBreaker, CBConfig,
-            BatchExecutor,
             PerformanceTracker,
             AlertService
         )
@@ -66,18 +73,46 @@ async def lifespan(app: FastAPI):
         kelly = KellySizing(KellyConfig())
         risk = RiskManager(RiskLimits(), db)
         circuit = CircuitBreaker(CBConfig())
-        executor = BatchExecutor(kalshi_client)
         performance = PerformanceTracker(db)
         alerts = AlertService(ws_manager)
 
-        # Create orchestrator
+        # Initialize consolidated fee calculator
+        fee_calculator = FeeCalculator()
+        logger.info("Fee calculator initialized")
+
+        # Initialize paper trading service
+        paper_service = PaperTradingService()
+        logger.info("Paper trading service initialized")
+
+        # Initialize ExecutionGateway - SINGLE ENTRY POINT FOR ALL TRADES
+        gateway = ExecutionGateway(
+            kalshi_client=kalshi_client,
+            paper_service=paper_service,
+            risk_manager=risk,
+            circuit_breaker=circuit,
+            fee_calculator=fee_calculator,
+            db=db,
+            alert_service=alerts
+        )
+        logger.info("ExecutionGateway initialized")
+
+        # Inject gateway into dependent services
+        routes.auto_trader_instance.gateway = gateway
+        btc_arb_engine.gateway = gateway
+        logger.info("Gateway injected into AutoTrader and BTC Arbitrage Engine")
+
+        # Store gateway in app state for route access
+        app.state.gateway = gateway
+        app.state.fee_calculator = fee_calculator
+
+        # Create orchestrator - uses gateway for execution
         orchestrator = StrategyOrchestrator(
             db=db,
             signals=signals,
             kelly=kelly,
             risk=risk,
             circuit=circuit,
-            executor=executor,
+            executor=gateway,  # Use gateway instead of BatchExecutor
             performance=performance,
             alerts=alerts
         )
@@ -89,17 +124,34 @@ async def lifespan(app: FastAPI):
         routes.set_orchestrator(orchestrator)
 
         print("[STARTUP] Strategy Orchestrator initialized")
+        print(f"  Execution Gateway: Active")
+        print(f"  Fee Calculator: Consolidated")
         print("=" * 50)
     except Exception as e:
         print(f"[STARTUP] Strategy Orchestrator failed to initialize: {e}")
         import traceback
         traceback.print_exc()
+        # Gateway is critical - re-raise to prevent app from starting
+        raise RuntimeError(f"Failed to initialize ExecutionGateway: {e}")
 
     yield
 
     # Shutdown
+    logger.info("Shutting down...")
+
+    # Stop Strategy Orchestrator first
+    try:
+        orchestrator = routes.get_orchestrator()
+        if orchestrator and orchestrator._is_running:
+            await orchestrator.stop()
+            print("[SHUTDOWN] Strategy Orchestrator stopped")
+    except Exception as e:
+        print(f"[SHUTDOWN] Error stopping Strategy Orchestrator: {e}")
+
+    # Stop AutoTrader
     if routes.auto_trader_instance and routes.auto_trader_instance.is_running:
         await routes.auto_trader_instance.stop()
+        print("[SHUTDOWN] AutoTrader stopped")
 
     # Shutdown BTC arbitrage engine
     try:
@@ -109,16 +161,11 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[SHUTDOWN] Error stopping BTC arbitrage engine: {e}")
 
-    # Shutdown Strategy Orchestrator
-    try:
-        orchestrator = routes.get_orchestrator()
-        if orchestrator and orchestrator._is_running:
-            await orchestrator.stop()
-            print("[SHUTDOWN] Strategy Orchestrator stopped")
-    except Exception as e:
-        print(f"[SHUTDOWN] Error stopping Strategy Orchestrator: {e}")
+    # Gateway cleanup (no explicit shutdown but we log it)
+    logger.info("ExecutionGateway stopped")
+    print("[SHUTDOWN] ExecutionGateway stopped")
 
-    print("Shutting down...")
+    print("Shutdown complete.")
 
 
 app = FastAPI(

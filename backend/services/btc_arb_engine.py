@@ -1,17 +1,24 @@
 """
 BTC Arbitrage Engine
 Runs continuous scanning and auto-execution in background.
+
+Uses ExecutionGateway for all trade execution.
 """
 
 import asyncio
+import json
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 from dataclasses import dataclass
 import time
 
 from .btc_arb_scanner import BTCArbitrageScanner, ArbOpportunity
 from ..utils.logger import btc_arb_logger as logger, btc_arb_activity
+
+if TYPE_CHECKING:
+    from .core.execution_gateway import ExecutionGateway
+    from .core.batch_executor import BatchResult
 
 
 @dataclass
@@ -42,11 +49,23 @@ class BTCArbitrageEngine:
     Continuous arbitrage scanning and execution engine.
     Runs in background, constantly scanning for opportunities.
     When auto_trade is enabled, executes immediately on finding edges.
+
+    Uses ExecutionGateway for all trade execution to ensure consistent
+    audit trails and risk management.
     """
 
-    def __init__(self, kalshi_client, db):
+    def __init__(self, kalshi_client, db, gateway: 'ExecutionGateway'):
+        """
+        Initialize the BTC Arbitrage Engine.
+
+        Args:
+            kalshi_client: KalshiClient for API access
+            db: Database connection
+            gateway: ExecutionGateway for trade execution
+        """
         self.kalshi = kalshi_client
         self.db = db
+        self.gateway = gateway
         self.scanner = BTCArbitrageScanner(kalshi_client)
 
         self.config = EngineConfig()
@@ -170,148 +189,110 @@ class BTCArbitrageEngine:
             if best_opp.edge_percent >= self.config.min_edge_percent:
                 await self._auto_execute(best_opp)
 
-    async def _auto_execute(self, opportunity: ArbOpportunity):
-        """Auto-execute an opportunity."""
+    async def _auto_execute(self, opportunity: ArbOpportunity) -> Optional[Dict]:
+        """Execute arbitrage opportunity through ExecutionGateway."""
         logger.info(f"[$] Auto-executing: {opportunity.range_description} ({opportunity.edge_percent:.1f}% edge)")
 
         try:
-            trade_calc = self.scanner.calculate_trade(
-                opportunity,
-                min(self.config.budget_cents, self.config.max_position_per_opp_cents)
+            # Calculate contracts based on budget
+            contracts = self._calculate_contracts(opportunity)
+            if contracts <= 0:
+                logger.warning(f"[WARN] Cannot execute {opportunity.id}: zero contracts")
+                return None
+
+            # Build legs from opportunity
+            legs_data = [
+                {
+                    'ticker': leg.ticker,
+                    'side': leg.side,
+                    'action': 'buy',
+                    'price_cents': leg.price_cents
+                }
+                for leg in opportunity.legs
+            ]
+
+            # Execute through gateway
+            result = await self.gateway.execute_arbitrage_batch(
+                legs_data=legs_data,
+                contracts_per_leg=contracts
             )
 
-            if 'error' in trade_calc:
-                logger.warning(f"[WARN] Calc error: {trade_calc['error']}")
-                return
+            # Record execution to btc_arb_executions table
+            execution_record = await self._record_execution(opportunity, result, contracts)
 
-            result = await self._execute_trade(opportunity, trade_calc)
-
-            if result.get('success'):
+            # Update stats
+            if result.success:
                 self.status.auto_executions += 1
-                logger.info(f"[OK] Executed! Profit: ${trade_calc['guaranteed_profit_cents']/100:.2f}")
+                logger.info(
+                    f"[OK] Executed BTC arb {opportunity.id}: "
+                    f"{contracts} contracts, {result.total_cost_cents}¢ cost, "
+                    f"expected profit: {opportunity.edge_cents * contracts}¢"
+                )
 
                 # Disable auto-trade after execution (prevent rapid-fire)
                 self.config.auto_trade_enabled = False
                 await self._save_config()
+            else:
+                logger.error(f"[X] Failed to execute BTC arb {opportunity.id}: {result.message}")
+
+            return execution_record
 
         except Exception as e:
             logger.error(f"[X] Execution error: {e}")
+            return None
 
-    async def _execute_trade(self, opportunity: ArbOpportunity, trade_calc: Dict) -> Dict:
-        """Execute a trade (paper or live)."""
-        contracts = trade_calc['contracts_per_leg']
+    def _calculate_contracts(self, opportunity: ArbOpportunity) -> int:
+        """Calculate number of contracts based on budget and opportunity."""
+        budget = min(self.config.budget_cents, self.config.max_position_per_opp_cents)
+        total_cost_per_contract = sum(leg.price_cents for leg in opportunity.legs)
+
+        if total_cost_per_contract <= 0:
+            return 0
+
+        return budget // total_cost_per_contract
+
+    async def _record_execution(
+        self,
+        opportunity: ArbOpportunity,
+        result: 'BatchResult',
+        contracts: int
+    ) -> Dict:
+        """Record execution to database with audit reference."""
         execution_id = str(uuid.uuid4())
 
-        if self.config.mode == 'paper':
-            return await self._execute_paper(opportunity, contracts, trade_calc, execution_id)
-        else:
-            return await self._execute_live(opportunity, contracts, trade_calc, execution_id)
-
-    async def _execute_paper(self, opp: ArbOpportunity, contracts: int, calc: Dict, exec_id: str) -> Dict:
-        """Execute paper trade."""
-        total_with_fees = calc['total_cost_cents'] + calc['total_fees_cents']
-
         try:
             async with self.db.connection() as conn:
-                # Check balance
-                cursor = await conn.execute("SELECT balance FROM paper_account WHERE id = 1")
-                row = await cursor.fetchone()
-                balance_cents = int((row[0] if row else 0) * 100)
-
-                if balance_cents < total_with_fees:
-                    return {'success': False, 'error': 'Insufficient balance'}
-
-                # Deduct balance
-                new_balance = (balance_cents - total_with_fees) / 100
-                await conn.execute(
-                    "UPDATE paper_account SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1",
-                    (new_balance,)
-                )
-
-                # Record positions for each leg
-                for leg in opp.legs:
-                    pos_id = str(uuid.uuid4())
-                    await conn.execute("""
-                        INSERT INTO paper_positions
-                        (id, created_at, ticker, side, contracts, avg_price, total_cost, total_fees, settlement_time, trade_id)
-                        VALUES (?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (
-                        pos_id, leg.ticker, leg.side, contracts,
-                        leg.price_cents / 100,
-                        contracts * leg.price_cents / 100,
-                        calc['total_fees_cents'] / 300,  # Split fees across 3 legs
-                        opp.settlement_time, exec_id
-                    ))
-
-                # Record execution
                 await conn.execute("""
-                    INSERT INTO btc_arb_executions
-                    (id, opportunity_id, mode, contracts_per_leg, total_cost_cents, total_fees_cents, guaranteed_profit_cents, status)
-                    VALUES (?, ?, 'paper', ?, ?, ?, ?, 'open')
-                """, (exec_id, opp.id, contracts, calc['total_cost_cents'], calc['total_fees_cents'], calc['guaranteed_profit_cents']))
-
-                await conn.commit()
-
-            return {
-                'success': True,
-                'execution_id': exec_id,
-                'mode': 'paper',
-                'contracts': contracts,
-                'profit_cents': calc['guaranteed_profit_cents']
-            }
-        except Exception as e:
-            logger.error(f"[X] Paper execution error: {e}")
-            return {'success': False, 'error': str(e)}
-
-    async def _execute_live(self, opp: ArbOpportunity, contracts: int, calc: Dict, exec_id: str) -> Dict:
-        """Execute live trade via Kalshi batch API."""
-        batch_orders = []
-        for leg in opp.legs:
-            order = {
-                'ticker': leg.ticker,
-                'side': leg.side,
-                'action': 'buy',
-                'count': contracts,
-                'type': 'limit',
-            }
-            if leg.side == 'yes':
-                order['yes_price'] = leg.price_cents
-            else:
-                order['no_price'] = leg.price_cents
-            batch_orders.append(order)
-
-        try:
-            response = await self.kalshi.place_batch_orders(batch_orders)
-
-            all_filled = all(
-                o.get('order', {}).get('status') == 'filled'
-                for o in response.get('orders', [])
-            )
-
-            # Record execution
-            async with self.db.connection() as conn:
-                await conn.execute("""
-                    INSERT INTO btc_arb_executions
-                    (id, opportunity_id, mode, contracts_per_leg, total_cost_cents, total_fees_cents, guaranteed_profit_cents, status, kalshi_response)
-                    VALUES (?, ?, 'live', ?, ?, ?, ?, ?, ?)
+                    INSERT INTO btc_arb_executions (
+                        id, opportunity_id, executed_at, mode,
+                        contracts_per_leg, total_cost_cents, total_fees_cents,
+                        guaranteed_profit_cents, status, kalshi_response,
+                        audit_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
-                    exec_id, opp.id, contracts,
-                    calc['total_cost_cents'], calc['total_fees_cents'], calc['guaranteed_profit_cents'],
-                    'filled' if all_filled else 'partial',
-                    str(response)
+                    execution_id,
+                    opportunity.id,
+                    datetime.utcnow().isoformat() + 'Z',
+                    result.mode,
+                    contracts,
+                    result.total_cost_cents,
+                    result.total_fees_cents,
+                    opportunity.edge_cents * contracts,
+                    'open' if result.success else 'failed',
+                    json.dumps([leg.to_dict() for leg in result.legs]),
+                    result.audit_id
                 ))
                 await conn.commit()
-
-            return {
-                'success': all_filled,
-                'execution_id': exec_id,
-                'mode': 'live',
-                'contracts': contracts,
-                'kalshi_response': response
-            }
-
         except Exception as e:
-            return {'success': False, 'error': str(e)}
+            logger.error(f"[X] Failed to record execution: {e}")
+
+        return {
+            'execution_id': execution_id,
+            'success': result.success,
+            'contracts': contracts,
+            'cost_cents': result.total_cost_cents,
+            'audit_id': result.audit_id
+        }
 
     async def get_opportunities(self) -> List[Dict]:
         """Get current opportunities."""
@@ -429,15 +410,14 @@ class BTCArbitrageEngine:
         return await self.get_status()
 
     async def manual_execute(self, opportunity_id: str) -> Dict:
-        """Manually execute a specific opportunity."""
+        """Manually execute specific opportunity through gateway."""
         async with self._opportunities_lock:
             opp = next((o for o in self._opportunities if o.id == opportunity_id), None)
 
         if not opp:
             return {'success': False, 'error': 'Opportunity not found or expired'}
 
-        trade_calc = self.scanner.calculate_trade(opp, self.config.budget_cents)
-        if 'error' in trade_calc:
-            return {'success': False, 'error': trade_calc['error']}
+        # Execute through gateway (same as auto)
+        result = await self._auto_execute(opp)
 
-        return await self._execute_trade(opp, trade_calc)
+        return result or {'success': False, 'error': 'Execution failed'}

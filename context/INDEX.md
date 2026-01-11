@@ -84,15 +84,19 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | run_logs.py | Log viewer entry point |
 | test_core_components.py | Core trading infrastructure component test suite |
 | backend/api/__init__.py | API module exports |
+| backend/api/prediction_routes.py | Weather prediction and forecast API endpoints |
 | backend/api/routes.py | REST API endpoint handlers |
 | backend/api/schemas.py | API request/response schemas |
 | backend/api/websocket.py | WebSocket connection manager |
 | backend/api/websocket_routes.py | WebSocket route handlers |
 | backend/database/__init__.py | Database module exports |
 | backend/database/connection.py | SQLite async connection manager |
+| backend/database/migrations/__init__.py | Database migrations module exports |
+| backend/database/migrations/001_execution_audit.py | Database migration for execution audit tables |
 | backend/database/schema.sql | Table definitions for paper trading |
 | backend/logging_config.py | Thread-safe logging with QueueHandler pattern |
 | backend/models/__init__.py | Models module exports |
+| backend/models/execution_models.py | Execution and trade-related data models |
 | backend/models/kalshi_models.py | Kalshi API data models with validation |
 | backend/models/nws_models.py | Weather forecast and location models |
 | backend/models/schemas.py | Pydantic request models |

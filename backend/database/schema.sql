@@ -173,13 +173,16 @@ CREATE TABLE IF NOT EXISTS btc_arb_executions (
     total_cost_cents INTEGER NOT NULL,
     total_fees_cents INTEGER NOT NULL,
     guaranteed_profit_cents INTEGER NOT NULL,
-    status TEXT DEFAULT 'open',  -- 'open', 'settled', 'partial'
+    status TEXT DEFAULT 'open',  -- 'open', 'settled', 'partial', 'failed'
     kalshi_response TEXT,
     settled_at TIMESTAMP,
     settlement_outcome TEXT,
     actual_payout_cents INTEGER,
-    actual_profit_cents INTEGER
+    actual_profit_cents INTEGER,
+    audit_id TEXT  -- Reference to execution_audit table
 );
+
+CREATE INDEX IF NOT EXISTS idx_btc_arb_exec_audit ON btc_arb_executions(audit_id);
 
 -- BTC Arbitrage scanner configuration
 CREATE TABLE IF NOT EXISTS btc_arb_config (
@@ -267,21 +270,22 @@ CREATE TABLE IF NOT EXISTS orchestrator_config (
 
 INSERT OR IGNORE INTO orchestrator_config (id) VALUES (1);
 
--- Circuit breaker state
+-- Circuit breaker state (persistent)
 CREATE TABLE IF NOT EXISTS circuit_breaker_state (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    is_tripped INTEGER DEFAULT 0,
+    tripped INTEGER NOT NULL DEFAULT 0,
     trip_reason TEXT,
-    tripped_at TIMESTAMP,
-    consecutive_losses INTEGER DEFAULT 0,
-    daily_loss_cents INTEGER DEFAULT 0,
-    hourly_losses INTEGER DEFAULT 0,
-    last_reset TIMESTAMP,
-    last_trade_time TIMESTAMP
+    trip_time TIMESTAMP,
+    permanent INTEGER NOT NULL DEFAULT 0,
+    consecutive_losses INTEGER NOT NULL DEFAULT 0,
+    daily_loss_cents INTEGER NOT NULL DEFAULT 0,
+    hourly_trades_json TEXT,
+    hourly_exposure_json TEXT,
+    last_reset_date TEXT,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT OR IGNORE INTO circuit_breaker_state (id, is_tripped, consecutive_losses, daily_loss_cents, hourly_losses)
-VALUES (1, 0, 0, 0, 0);
+INSERT OR IGNORE INTO circuit_breaker_state (id) VALUES (1);
 
 -- Risk manager positions (live tracking)
 CREATE TABLE IF NOT EXISTS risk_positions (
@@ -348,3 +352,31 @@ CREATE TABLE IF NOT EXISTS alert_history (
 CREATE INDEX IF NOT EXISTS idx_alerts_created ON alert_history(created_at);
 CREATE INDEX IF NOT EXISTS idx_alerts_type ON alert_history(type);
 CREATE INDEX IF NOT EXISTS idx_alerts_ack ON alert_history(acknowledged);
+
+-- ===========================================
+-- EXECUTION AUDIT TABLES
+-- ===========================================
+
+-- Execution audit log for all trade executions
+CREATE TABLE IF NOT EXISTS execution_audit (
+    id TEXT PRIMARY KEY,
+    request_id TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    source TEXT NOT NULL CHECK (source IN ('orchestrator', 'manual', 'auto_trader', 'btc_arb', 'weather_arb', 'strategy')),
+    signal_id TEXT,
+    mode TEXT NOT NULL CHECK (mode IN ('paper', 'live', 'dual')),
+    legs_json TEXT NOT NULL,
+    atomic INTEGER NOT NULL DEFAULT 1,
+    max_slippage_cents INTEGER,
+    success INTEGER NOT NULL,
+    total_cost_cents INTEGER,
+    total_fees_cents INTEGER,
+    execution_time_ms INTEGER,
+    leg_results_json TEXT,
+    error TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_exec_audit_source ON execution_audit(source);
+CREATE INDEX IF NOT EXISTS idx_exec_audit_mode ON execution_audit(mode);
+CREATE INDEX IF NOT EXISTS idx_exec_audit_created ON execution_audit(created_at);
+CREATE INDEX IF NOT EXISTS idx_exec_audit_request ON execution_audit(request_id);

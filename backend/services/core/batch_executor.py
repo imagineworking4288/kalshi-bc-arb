@@ -8,9 +8,10 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
+import warnings
 
-from ..log_config import get_logger
+from backend.logging_config import get_logger
 
 logger = get_logger("batch_executor")
 
@@ -79,6 +80,8 @@ class BatchResult:
     execution_ms: int = 0
     message: str = ""
     mode: str = "paper"
+    audit_id: Optional[str] = None  # Set by ExecutionGateway
+    source: Optional[str] = None    # Set by ExecutionGateway
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -90,7 +93,9 @@ class BatchResult:
             "total_fees_cents": self.total_fees_cents,
             "execution_ms": self.execution_ms,
             "message": self.message,
-            "mode": self.mode
+            "mode": self.mode,
+            "audit_id": self.audit_id,
+            "source": self.source
         }
 
 
@@ -139,7 +144,7 @@ class BatchExecutor:
     async def execute(
         self,
         legs: List[OrderLeg],
-        mode: str = "paper",
+        mode: Literal['paper', 'live'],
         atomic: bool = True
     ) -> BatchResult:
         """
@@ -147,7 +152,7 @@ class BatchExecutor:
 
         Args:
             legs: List of order legs to execute
-            mode: "paper" or "live"
+            mode: "paper" or "live" (required, no default)
             atomic: If True, all orders must succeed (live mode only)
 
         Returns:
@@ -157,16 +162,16 @@ class BatchExecutor:
         start_time = time.time()
 
         if mode == "paper":
-            result = await self._execute_paper(legs, batch_id)
+            result = await self._execute_paper_batch(legs, batch_id)
         else:
-            result = await self._execute_live(legs, batch_id, atomic)
+            result = await self._execute_live_batch(legs, batch_id, atomic)
 
         result.execution_ms = int((time.time() - start_time) * 1000)
         result.mode = mode
 
         return result
 
-    async def _execute_paper(
+    async def _execute_paper_batch(
         self,
         legs: List[OrderLeg],
         batch_id: str
@@ -204,7 +209,7 @@ class BatchExecutor:
             message=f"Paper: {len(legs)} orders filled"
         )
 
-    async def _execute_live(
+    async def _execute_live_batch(
         self,
         legs: List[OrderLeg],
         batch_id: str,
@@ -320,7 +325,16 @@ class BatchExecutor:
 
         Returns:
             BatchResult with execution details
+
+        .. deprecated::
+            Use ExecutionGateway.execute_arbitrage instead.
         """
+        warnings.warn(
+            "BatchExecutor.execute_arbitrage is deprecated. "
+            "Use ExecutionGateway.execute_arbitrage instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         legs = []
         for leg_data in legs_data:
             leg = OrderLeg(
@@ -358,7 +372,16 @@ class BatchExecutor:
 
         Returns:
             BatchResult with execution details
+
+        .. deprecated::
+            Use ExecutionGateway.execute_single instead.
         """
+        warnings.warn(
+            "BatchExecutor.execute_single is deprecated. "
+            "Use ExecutionGateway.execute_single instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         leg = OrderLeg(
             ticker=ticker,
             side=OrderSide(side),

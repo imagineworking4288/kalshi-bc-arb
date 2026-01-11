@@ -134,9 +134,30 @@ Async SQLite database connection manager
 | Database.connection | - | AsyncContextManager | Async context manager yielding aiosqlite connection |
 | db | - | Database | Module-level Database singleton instance |
 
+### migrations/__init__.py
+Database migrations module exports
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| - | - | - | Module exports for database migration utilities |
+
+### migrations/001_execution_audit.py
+Database migration for execution audit tables
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| migrate | - | - | Apply execution audit table schema changes |
+
 ---
 
 ## backend/models/
+
+### execution_models.py
+Execution and trade-related data models
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| - | - | - | Data models for trade execution, order management, and audit trails |
 
 ### schemas.py
 Pydantic request/response models

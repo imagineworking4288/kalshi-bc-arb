@@ -1,12 +1,25 @@
 """
 Fee calculator for Kalshi prediction markets.
 
+DEPRECATED: This module is deprecated. Use backend.services.core.fee_calculator instead.
+
+    from backend.services.core import FeeCalculator, FeeType, FeeCalculation
+
 Kalshi Fee Formula:
 - Taker Fee = 7% × price × (1 - price) per contract
 - Maker Fee = 3.5% × price × (1 - price) per contract
 
 Example: At 50¢ price → 1.75¢ taker fee per contract
 """
+
+import warnings
+
+warnings.warn(
+    "backend.services.fee_calculator is deprecated. "
+    "Use backend.services.core.fee_calculator instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 from dataclasses import dataclass
 from enum import Enum

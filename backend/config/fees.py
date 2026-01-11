@@ -1,4 +1,19 @@
-"""Kalshi fee calculations."""
+"""
+Kalshi fee calculations.
+
+DEPRECATED: This module is deprecated. Use backend.services.core.fee_calculator instead.
+
+    from backend.services.core import FeeCalculator, FeeType, FeeCalculation
+"""
+
+import warnings
+
+warnings.warn(
+    "backend.config.fees is deprecated. "
+    "Use backend.services.core.fee_calculator instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 from dataclasses import dataclass
 from typing import Tuple

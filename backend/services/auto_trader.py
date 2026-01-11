@@ -5,8 +5,9 @@ Automatically executes trades based on signals from EdgeDetector.
 
 import asyncio
 from datetime import datetime, date
-from typing import Optional, List
+from typing import Optional, List, Set
 from .edge_detector import EdgeDetector, TradingSignal
+from .execution.atomic_executor import AtomicExecutor, ExecutionResult
 from .log_config import get_logger
 
 logger = get_logger("auto_trader")
@@ -15,9 +16,10 @@ logger = get_logger("auto_trader")
 class AutoTrader:
     """Automated trading execution with risk management."""
 
-    def __init__(self, kalshi_client, db):
+    def __init__(self, kalshi_client, db, executor: AtomicExecutor = None):
         self.kalshi = kalshi_client
         self.db = db
+        self.executor = executor  # Will be injected from main.py
         self.edge_detector = EdgeDetector(kalshi_client, db)
 
         # Configuration (loaded from DB)
@@ -27,6 +29,10 @@ class AutoTrader:
         self.max_daily_loss = 10000  # cents
         self.max_open_positions = 10
         self.allowed_series = ['KXBTC', 'KXBTCD']
+        self.mode = 'paper'  # 'paper' or 'live'
+
+        # Temporary position cache (placeholder for Phase 2 PositionManager)
+        self._position_cache: Set[str] = set()
 
         # Runtime state
         self.is_running = False
@@ -49,6 +55,8 @@ class AutoTrader:
                 self.max_open_positions = config.get('max_open_positions', 10)
                 series = config.get('allowed_series', 'KXBTC,KXBTCD')
                 self.allowed_series = [s.strip() for s in series.split(',')]
+                # Set mode based on enabled flag
+                self.mode = 'paper' if self.enabled == 1 else 'live'
 
         await self.edge_detector.load_config()
 
@@ -111,11 +119,11 @@ class AutoTrader:
             await self._process_signal(signal)
 
     async def _process_signal(self, signal: TradingSignal):
-        """Process a single trading signal."""
+        """Process single trading signal through AtomicExecutor."""
         logger.info(f"  Signal: {signal.ticker} {signal.signal_type} "
                     f"edge={signal.edge_percent:.1f}% model={signal.model_prob:.1%}")
 
-        # Check if we already have a position in this market
+        # Check if we already have position (will use PositionManager in Phase 2)
         if await self._has_position(signal.ticker):
             logger.info(f"    Skipping - already have position")
             return
@@ -136,161 +144,58 @@ class AutoTrader:
         # Calculate size (respect limits)
         size = min(signal.recommended_size, self.max_position_size)
 
-        # Parse signal type
-        side = 'yes' if 'yes' in signal.signal_type else 'no'
-        action = 'buy'  # Currently only buy signals
+        # Parse signal type (e.g., 'buy_yes', 'buy_no')
+        parts = signal.signal_type.split('_')
+        action = parts[0] if parts else 'buy'  # 'buy' or 'sell'
+        side = parts[1] if len(parts) > 1 else 'yes'  # 'yes' or 'no'
 
-        # Execute order
+        # Execute through AtomicExecutor
         try:
-            # Determine execution mode
-            use_paper = (self.enabled == 1)
-            use_live = (self.enabled == 2)
+            if not self.executor:
+                logger.error("No executor configured - cannot execute trades")
+                return
 
-            if use_paper:
-                result = await self._execute_paper_trade(signal.ticker, side, action, size, signal.market_price)
-            else:
-                result = await self._execute_live_trade(signal.ticker, side, action, size, signal.market_price)
+            mode = 'paper' if self.enabled == 1 else 'live'
+            result: ExecutionResult = await self.executor.execute_single(
+                ticker=signal.ticker,
+                side=side,
+                action=action,
+                quantity=size,
+                price_cents=signal.market_price,
+                mode=mode
+            )
 
-            if result.get('success'):
-                logger.info(f"    EXECUTED: {size} contracts @ {signal.market_price}¢ (mode={'paper' if use_paper else 'live'})")
-                await self._update_signal_status(signal_id, 'executed', signal.market_price)
+            if result.success:
+                # Update position cache
+                self._position_cache.add(signal.ticker)
+
+                fill_price = result.legs[0].fill_price if result.legs else signal.market_price
+                logger.info(f"    EXECUTED: {size} contracts @ {fill_price}c (mode={mode})")
+                await self._update_signal_status(signal_id, 'executed', fill_price)
             else:
-                logger.warning(f"    FAILED: {result.get('error', 'Unknown error')}")
-                await self._update_signal_status(signal_id, 'rejected')
+                error_msg = ', '.join(result.errors) if result.errors else 'Unknown error'
+                logger.warning(f"    FAILED: {error_msg}")
+                await self._update_signal_status(signal_id, 'rejected', notes=error_msg)
 
         except Exception as e:
             logger.error(f"    ERROR executing trade: {e}", exc_info=True)
-            await self._update_signal_status(signal_id, 'rejected')
-
-    async def _execute_paper_trade(self, ticker: str, side: str, action: str, count: int, price_cents: int) -> dict:
-        """Execute a paper trade."""
-        import uuid
-        from .fee_calculator import calculate_fee
-
-        try:
-            async with self.db.connection() as conn:
-                # Get paper account balance
-                cursor = await conn.execute("SELECT balance FROM paper_account WHERE id = 1")
-                balance_row = await cursor.fetchone()
-
-                if not balance_row:
-                    return {"success": False, "error": "Paper account not initialized"}
-
-                # Calculate cost
-                price_dollars = price_cents / 100
-                total_cost = count * price_dollars
-                total_fees = calculate_fee(count, price_dollars)
-                total_debit = total_cost + total_fees
-
-                current_balance = balance_row[0]
-                if current_balance < total_debit:
-                    return {
-                        "success": False,
-                        "error": f"Insufficient balance: ${current_balance:.2f} < ${total_debit:.2f}"
-                    }
-
-                # Record order
-                order_id = str(uuid.uuid4())
-                now = datetime.now().isoformat()
-                await conn.execute(
-                    """INSERT INTO manual_orders
-                       (id, created_at, ticker, side, action, count, price_cents, mode, status,
-                        filled_count, avg_fill_price, total_cost, total_fees, updated_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (order_id, now, ticker, side, action, count,
-                     price_cents, "paper", "filled", count, price_dollars,
-                     total_cost, total_fees, now)
-                )
-
-                # Create position
-                position_id = str(uuid.uuid4())
-                await conn.execute(
-                    """INSERT INTO paper_positions
-                       (id, created_at, ticker, side, contracts, avg_price, total_cost, total_fees,
-                        settlement_time, settled, trade_id)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (position_id, now, ticker, side, count, price_dollars,
-                     total_cost, total_fees, now, 0, order_id)
-                )
-
-                # Update balance
-                new_balance = current_balance - total_debit
-                await conn.execute(
-                    "UPDATE paper_account SET balance = ?, updated_at = ? WHERE id = 1",
-                    (new_balance, now)
-                )
-
-                await conn.commit()
-
-                return {
-                    "success": True,
-                    "order_id": order_id,
-                    "position_id": position_id,
-                    "total_cost": total_cost,
-                    "total_fees": total_fees
-                }
-
-        except Exception as e:
-            logger.error(f"Error executing paper trade: {e}", exc_info=True)
-            return {"success": False, "error": str(e)}
-
-    async def _execute_live_trade(self, ticker: str, side: str, action: str, count: int, price_cents: int) -> dict:
-        """Execute a live trade via Kalshi API."""
-        import uuid
-
-        try:
-            kalshi_result = await self.kalshi.place_order(
-                ticker=ticker,
-                side=side,
-                action=action,
-                count=count,
-                price=price_cents
-            )
-
-            # Parse Kalshi response
-            order = kalshi_result.get("order", {})
-            kalshi_order_id = order.get("order_id")
-            filled_count = order.get("yes_count", 0) if side == 'yes' else order.get("no_count", 0)
-            status = order.get("status", "pending")
-
-            # Record order in database
-            order_id = str(uuid.uuid4())
-            now = datetime.now().isoformat()
-
-            async with self.db.connection() as conn:
-                await conn.execute(
-                    """INSERT INTO manual_orders
-                       (id, created_at, ticker, side, action, count, price_cents, mode, status,
-                        filled_count, kalshi_order_id, updated_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (order_id, now, ticker, side, action, count,
-                     price_cents, "live", status, filled_count, kalshi_order_id, now)
-                )
-                await conn.commit()
-
-            return {
-                "success": status == "resting" or status == "filled",
-                "order_id": order_id,
-                "kalshi_order_id": kalshi_order_id,
-                "status": status,
-                "filled_count": filled_count
-            }
-
-        except Exception as e:
-            logger.error(f"Error executing live trade: {e}", exc_info=True)
-            return {"success": False, "error": str(e)}
+            await self._update_signal_status(signal_id, 'rejected', notes=str(e))
 
     async def _has_position(self, ticker: str) -> bool:
-        """Check if we already have a position in this market."""
+        """Check if we already have a position. Will use PositionManager in Phase 2."""
+        # Check local cache first
+        if ticker in self._position_cache:
+            return True
+
+        # Fall back to DB check
         async with self.db.connection() as conn:
-            # Check paper positions
             cursor = await conn.execute(
                 "SELECT 1 FROM paper_positions WHERE ticker = ? AND contracts > 0 AND settled = 0",
                 (ticker,)
             )
             if await cursor.fetchone():
+                self._position_cache.add(ticker)  # Cache it
                 return True
-
         return False
 
     async def _position_count(self) -> int:
@@ -316,20 +221,22 @@ class AutoTrader:
         return False
 
     async def _update_signal_status(self, signal_id: int, status: str,
-                                     execution_price: int = None):
+                                     execution_price: int = None, notes: str = None):
         """Update signal status in database."""
         async with self.db.connection() as conn:
             if execution_price:
                 await conn.execute("""
                     UPDATE trading_signals
-                    SET status = ?, executed_at = CURRENT_TIMESTAMP, execution_price = ?
+                    SET status = ?, executed_at = CURRENT_TIMESTAMP,
+                        execution_price = ?, notes = ?
                     WHERE id = ?
-                """, (status, execution_price, signal_id))
+                """, (status, execution_price, notes, signal_id))
             else:
-                await conn.execute(
-                    "UPDATE trading_signals SET status = ? WHERE id = ?",
-                    (status, signal_id)
-                )
+                await conn.execute("""
+                    UPDATE trading_signals
+                    SET status = ?, notes = ?
+                    WHERE id = ?
+                """, (status, notes, signal_id))
             await conn.commit()
 
     async def get_status(self) -> dict:
@@ -348,7 +255,7 @@ class AutoTrader:
     async def update_config(self, **kwargs) -> dict:
         """Update auto-trader configuration."""
         valid_fields = ['enabled', 'min_edge_percent', 'max_position_size',
-                        'max_daily_loss_cents', 'max_open_positions', 'allowed_series']
+                        'max_daily_loss_cents', 'max_open_positions', 'allowed_series', 'mode']
 
         updates = {k: v for k, v in kwargs.items() if k in valid_fields}
         if not updates:
