@@ -75,6 +75,11 @@ class BTCArbitrageEngine:
         self._opportunities_lock = asyncio.Lock()
         self._task: Optional[asyncio.Task] = None
 
+    def set_gateway(self, gateway: 'ExecutionGateway'):
+        """Set or update the ExecutionGateway instance."""
+        self.gateway = gateway
+        logger.info("[CONFIG] ExecutionGateway updated")
+
     async def start(self):
         """Start the engine."""
         if self.status.is_running:
@@ -212,9 +217,11 @@ class BTCArbitrageEngine:
             ]
 
             # Execute through gateway
-            result = await self.gateway.execute_arbitrage_batch(
-                legs_data=legs_data,
-                contracts_per_leg=contracts
+            result = await self.gateway.execute_arbitrage(
+                legs=legs_data,
+                contracts_per_leg=contracts,
+                mode=self.config.mode,
+                source="btc_arb"
             )
 
             # Record execution to btc_arb_executions table

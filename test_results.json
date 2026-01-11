@@ -1,10 +1,10 @@
 {
-  "test_run_timestamp": "2026-01-04T23:58:10.475300Z",
-  "overall_status": "PASS",
+  "test_run_timestamp": "2026-01-11T04:29:06.260287Z",
+  "overall_status": "FAIL",
   "summary": {
     "total_tests": 11,
-    "passed": 11,
-    "failed": 0,
+    "passed": 7,
+    "failed": 4,
     "warnings": 0
   },
   "components": {
@@ -40,7 +40,7 @@
         {
           "method": "TradingSignal creation",
           "success": true,
-          "result": "Created signal with id=71eb7c54...",
+          "result": "Created signal with id=9e34a75b...",
           "error": null
         },
         {
@@ -78,7 +78,7 @@
         {
           "method": "create()",
           "success": true,
-          "result": "Created signal 8a974c78...",
+          "result": "Created signal 034e65ce...",
           "error": null
         },
         {
@@ -114,7 +114,7 @@
         {
           "method": "get_history()",
           "success": true,
-          "result": "Got 2 history records",
+          "result": "Got 3 history records",
           "error": null
         },
         {
@@ -124,7 +124,9 @@
           "error": null
         }
       ],
-      "potential_fixes": []
+      "potential_fixes": [
+        "Database init failed: no such column: audit_id"
+      ]
     },
     "kelly_sizing": {
       "status": "PASS",
@@ -183,60 +185,19 @@
       "potential_fixes": []
     },
     "risk_manager": {
-      "status": "PASS",
+      "status": "FAIL",
       "import_test": {
-        "success": true,
+        "success": false,
         "error": null
       },
       "instantiation_test": {
-        "success": true,
+        "success": false,
         "error": null
       },
-      "method_tests": [
-        {
-          "method": "RiskLimits defaults",
-          "success": true,
-          "result": "max_position=100, max_daily_loss=5000",
-          "error": null
-        },
-        {
-          "method": "check_trade() valid",
-          "success": true,
-          "result": "approved=True, reason=All risk checks passed",
-          "error": null
-        },
-        {
-          "method": "check_trade() over limit",
-          "success": true,
-          "result": "Adjusted size to 20",
-          "error": null
-        },
-        {
-          "method": "record_trade()",
-          "success": true,
-          "result": "Position recorded",
-          "error": null
-        },
-        {
-          "method": "record_pnl()",
-          "success": true,
-          "result": "P&L recorded",
-          "error": null
-        },
-        {
-          "method": "close_position()",
-          "success": true,
-          "result": "Position partially closed",
-          "error": null
-        },
-        {
-          "method": "get_status()",
-          "success": true,
-          "result": "Status keys: ['limits', 'current', 'positions', 'daily_loss_remaining_cents']",
-          "error": null
-        }
-      ],
-      "potential_fixes": []
+      "method_tests": [],
+      "potential_fixes": [],
+      "fatal_error": "no such column: audit_id",
+      "traceback": "Traceback (most recent call last):\n  File \"C:\\Projects\\kalshi-bc-arb\\test_core_components.py\", line 1434, in run_all_tests\n    await test_func()\n  File \"C:\\Projects\\kalshi-bc-arb\\test_core_components.py\", line 430, in test_risk_manager\n    await db.initialize()\n  File \"C:\\Projects\\kalshi-bc-arb\\backend\\database\\connection.py\", line 20, in initialize\n    await conn.executescript(schema)\n  File \"C:\\Users\\dylan\\AppData\\Roaming\\Python\\Python311\\site-packages\\aiosqlite\\core.py\", line 222, in executes"
     },
     "circuit_breaker": {
       "status": "PASS",
@@ -351,60 +312,19 @@
       "potential_fixes": []
     },
     "performance_tracker": {
-      "status": "PASS",
+      "status": "FAIL",
       "import_test": {
-        "success": true,
+        "success": false,
         "error": null
       },
       "instantiation_test": {
-        "success": true,
+        "success": false,
         "error": null
       },
-      "method_tests": [
-        {
-          "method": "record_trade()",
-          "success": true,
-          "result": "Recorded trade 56a6186b...",
-          "error": null
-        },
-        {
-          "method": "record_exit()",
-          "success": true,
-          "result": "Exit recorded: 545",
-          "error": null
-        },
-        {
-          "method": "record_arbitrage_exit()",
-          "success": true,
-          "result": "Arb exit recorded",
-          "error": null
-        },
-        {
-          "method": "get_metrics()",
-          "success": true,
-          "result": "trades=4, win_rate=10000.00%",
-          "error": null
-        },
-        {
-          "method": "get_daily_pnl()",
-          "success": true,
-          "result": "Got 1 days of data",
-          "error": null
-        },
-        {
-          "method": "get_strategy_breakdown()",
-          "success": true,
-          "result": "Strategies: ['btc', 'weather']",
-          "error": null
-        },
-        {
-          "method": "Metrics.to_dict()",
-          "success": true,
-          "result": "Serialization works",
-          "error": null
-        }
-      ],
-      "potential_fixes": []
+      "method_tests": [],
+      "potential_fixes": [],
+      "fatal_error": "no such column: audit_id",
+      "traceback": "Traceback (most recent call last):\n  File \"C:\\Projects\\kalshi-bc-arb\\test_core_components.py\", line 1434, in run_all_tests\n    await test_func()\n  File \"C:\\Projects\\kalshi-bc-arb\\test_core_components.py\", line 779, in test_performance_tracker\n    await db.initialize()\n  File \"C:\\Projects\\kalshi-bc-arb\\backend\\database\\connection.py\", line 20, in initialize\n    await conn.executescript(schema)\n  File \"C:\\Users\\dylan\\AppData\\Roaming\\Python\\Python311\\site-packages\\aiosqlite\\core.py\", line 222, in e"
     },
     "alert_service": {
       "status": "PASS",
@@ -499,128 +419,34 @@
       "potential_fixes": []
     },
     "strategy_orchestrator": {
-      "status": "PASS",
+      "status": "FAIL",
       "import_test": {
-        "success": true,
+        "success": false,
         "error": null
       },
       "instantiation_test": {
-        "success": true,
+        "success": false,
         "error": null
       },
-      "method_tests": [
-        {
-          "method": "register()",
-          "success": true,
-          "result": "Strategy registered",
-          "error": null
-        },
-        {
-          "method": "enable_strategy()",
-          "success": true,
-          "result": "Enabled: True",
-          "error": null
-        },
-        {
-          "method": "set_mode()",
-          "success": true,
-          "result": "Mode set to paper",
-          "error": null
-        },
-        {
-          "method": "set_auto_trade()",
-          "success": true,
-          "result": "Auto-trade set to False",
-          "error": null
-        },
-        {
-          "method": "get_status() before start",
-          "success": true,
-          "result": "Status keys: ['is_running', 'auto_trade_enabled', 'mode', 'uptime_seconds', 'strategies', 'stats', 'components']",
-          "error": null
-        },
-        {
-          "method": "start()",
-          "success": true,
-          "result": "Orchestrator started",
-          "error": null
-        },
-        {
-          "method": "manual_scan()",
-          "success": true,
-          "result": "Found 0 signals",
-          "error": null
-        },
-        {
-          "method": "stop()",
-          "success": true,
-          "result": "Orchestrator stopped",
-          "error": null
-        },
-        {
-          "method": "unregister()",
-          "success": true,
-          "result": "Unregistered: True",
-          "error": null
-        },
-        {
-          "method": "load_config()",
-          "success": true,
-          "result": "Config loaded from DB",
-          "error": null
-        },
-        {
-          "method": "save_config()",
-          "success": true,
-          "result": "Config saved to DB",
-          "error": null
-        }
-      ],
-      "potential_fixes": []
+      "method_tests": [],
+      "potential_fixes": [],
+      "fatal_error": "no such column: audit_id",
+      "traceback": "Traceback (most recent call last):\n  File \"C:\\Projects\\kalshi-bc-arb\\test_core_components.py\", line 1434, in run_all_tests\n    await test_func()\n  File \"C:\\Projects\\kalshi-bc-arb\\test_core_components.py\", line 1043, in test_strategy_orchestrator\n    await db.initialize()\n  File \"C:\\Projects\\kalshi-bc-arb\\backend\\database\\connection.py\", line 20, in initialize\n    await conn.executescript(schema)\n  File \"C:\\Users\\dylan\\AppData\\Roaming\\Python\\Python311\\site-packages\\aiosqlite\\core.py\", line 222, i"
     },
     "backtest_engine": {
-      "status": "PASS",
+      "status": "FAIL",
       "import_test": {
-        "success": true,
+        "success": false,
         "error": null
       },
       "instantiation_test": {
-        "success": true,
+        "success": false,
         "error": null
       },
-      "method_tests": [
-        {
-          "method": "BacktestConfig creation",
-          "success": true,
-          "result": "balance=100000, kelly=0.25",
-          "error": null
-        },
-        {
-          "method": "run()",
-          "success": true,
-          "result": "final_balance=100000, trades=0",
-          "error": null
-        },
-        {
-          "method": "run_multiple()",
-          "success": true,
-          "result": "Results for 1 strategies",
-          "error": null
-        },
-        {
-          "method": "BacktestResult.to_dict()",
-          "success": true,
-          "result": "Serialization works",
-          "error": null
-        },
-        {
-          "method": "BacktestTrade.to_dict()",
-          "success": true,
-          "result": "Trade serialization works",
-          "error": null
-        }
-      ],
-      "potential_fixes": []
+      "method_tests": [],
+      "potential_fixes": [],
+      "fatal_error": "no such column: audit_id",
+      "traceback": "Traceback (most recent call last):\n  File \"C:\\Projects\\kalshi-bc-arb\\test_core_components.py\", line 1434, in run_all_tests\n    await test_func()\n  File \"C:\\Projects\\kalshi-bc-arb\\test_core_components.py\", line 1205, in test_backtest_engine\n    await db.initialize()\n  File \"C:\\Projects\\kalshi-bc-arb\\backend\\database\\connection.py\", line 20, in initialize\n    await conn.executescript(schema)\n  File \"C:\\Users\\dylan\\AppData\\Roaming\\Python\\Python311\\site-packages\\aiosqlite\\core.py\", line 222, in exec"
     },
     "main_integration": {
       "status": "PASS",

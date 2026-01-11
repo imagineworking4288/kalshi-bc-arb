@@ -64,6 +64,14 @@ from .strategy_orchestrator import StrategyOrchestrator
 
 from .execution_gateway import ExecutionGateway, GatewayConfig
 
+from .position_manager import (
+    PositionSource,
+    PositionConfig,
+    UnifiedPosition,
+    ExposureSummary,
+    PositionManager,
+)
+
 from .backtest_engine import (
     BacktestConfig,
     BacktestTrade,
@@ -127,6 +135,14 @@ __all__ = [
 
     # Execution gateway
     "ExecutionGateway",
+    "GatewayConfig",
+
+    # Position management
+    "PositionSource",
+    "PositionConfig",
+    "UnifiedPosition",
+    "ExposureSummary",
+    "PositionManager",
 
     # Backtesting
     "BacktestConfig",

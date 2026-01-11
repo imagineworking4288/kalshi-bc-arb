@@ -1259,6 +1259,187 @@ async def trip_circuit_breaker(reason: str = "Manual trip"):
 
 
 # ===========================================
+# EMERGENCY & RECOVERY
+# ===========================================
+
+@router.post("/emergency/kill")
+async def emergency_kill(request: Request):
+    """
+    Emergency kill switch - stop all trading immediately.
+
+    This will:
+    - Trip the circuit breaker permanently
+    - Stop the strategy orchestrator
+    - Stop the auto-trader
+    - Stop the BTC arbitrage engine
+    - Send a critical alert
+    """
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+
+    # Trip circuit breaker
+    await orch.circuit.force_trip("Emergency kill switch activated")
+
+    # Stop orchestrator
+    if orch._is_running:
+        await orch.stop()
+
+    # Stop auto-trader
+    if hasattr(request.app.state, 'auto_trader') and request.app.state.auto_trader:
+        auto_trader = request.app.state.auto_trader
+        if auto_trader.is_running:
+            await auto_trader.stop()
+
+    # Stop BTC arb engine
+    btc_engine = get_btc_arb_engine()
+    if btc_engine and btc_engine.status.is_running:
+        await btc_engine.stop()
+
+    # Send critical alert
+    from ..services.core.alert_service import AlertType, AlertPriority
+    await orch.alerts.send(
+        AlertType.CIRCUIT_BREAKER,
+        "EMERGENCY KILL SWITCH",
+        "All trading systems halted by emergency kill switch",
+        AlertPriority.CRITICAL,
+        {"source": "emergency_kill_endpoint"}
+    )
+
+    return {
+        "status": "killed",
+        "message": "All trading systems stopped",
+        "circuit_breaker": orch.circuit.get_status()
+    }
+
+
+@router.post("/emergency/resume")
+async def emergency_resume(request: Request):
+    """
+    Resume trading after emergency stop.
+
+    Requires confirmation string to prevent accidental resume.
+    Only resets circuit breaker - trading systems must be manually restarted.
+    """
+    data = await request.json()
+    confirmation = data.get("confirmation", "")
+
+    if confirmation != "CONFIRM_RESUME_TRADING":
+        raise HTTPException(
+            400,
+            "Must provide confirmation='CONFIRM_RESUME_TRADING' to resume"
+        )
+
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+
+    # Reset circuit breaker
+    await orch.circuit.reset()
+
+    # Send info alert
+    from ..services.core.alert_service import AlertType, AlertPriority
+    await orch.alerts.send(
+        AlertType.INFO,
+        "Emergency Resume",
+        "Circuit breaker reset. Trading systems can be manually restarted.",
+        AlertPriority.HIGH,
+        {"source": "emergency_resume_endpoint"}
+    )
+
+    return {
+        "status": "resumed",
+        "message": "Circuit breaker reset. Manually restart trading systems.",
+        "circuit_breaker": orch.circuit.get_status()
+    }
+
+
+@router.get("/emergency/status")
+async def emergency_status(request: Request):
+    """
+    Get emergency/system health status.
+
+    Returns status of all trading components:
+    - Circuit breaker state
+    - Orchestrator running state
+    - Auto-trader running state
+    - BTC arb engine running state
+    """
+    orch = get_orchestrator()
+    btc_engine = get_btc_arb_engine()
+
+    # Get auto-trader status
+    auto_trader_running = False
+    if hasattr(request.app.state, 'auto_trader') and request.app.state.auto_trader:
+        auto_trader_running = request.app.state.auto_trader.is_running
+
+    return {
+        "circuit_breaker": orch.circuit.get_status() if orch else None,
+        "orchestrator_running": orch._is_running if orch else False,
+        "auto_trader_running": auto_trader_running,
+        "btc_arb_running": btc_engine.status.is_running if btc_engine else False,
+        "all_systems_stopped": (
+            (not orch or not orch._is_running) and
+            not auto_trader_running and
+            (not btc_engine or not btc_engine.status.is_running)
+        )
+    }
+
+
+# ===========================================
+# RECONCILIATION
+# ===========================================
+
+@router.get("/reconciliation/status")
+async def get_reconciliation_status(request: Request):
+    """Get reconciliation service status and recent discrepancies."""
+    if not hasattr(request.app.state, 'reconciler') or not request.app.state.reconciler:
+        raise HTTPException(503, "Reconciliation service not available")
+    return request.app.state.reconciler.get_status()
+
+
+@router.post("/reconciliation/run")
+async def run_reconciliation(request: Request):
+    """
+    Manually trigger reconciliation.
+
+    Forces immediate comparison of local positions vs Kalshi API.
+    Returns list of detected discrepancies.
+    """
+    if not hasattr(request.app.state, 'reconciler') or not request.app.state.reconciler:
+        raise HTTPException(503, "Reconciliation service not available")
+
+    discrepancies = await request.app.state.reconciler.reconcile_now()
+
+    return {
+        "success": True,
+        "count": len(discrepancies),
+        "discrepancies": [d.to_dict() for d in discrepancies]
+    }
+
+
+# ===========================================
+# GATEWAY STATS
+# ===========================================
+
+@router.get("/gateway/stats")
+async def get_gateway_stats(request: Request):
+    """Get execution gateway statistics."""
+    gateway = get_gateway(request)
+    if not gateway:
+        raise HTTPException(503, "Execution gateway not available")
+
+    return {
+        "status": "active",
+        "cache_size": len(gateway._idempotency_cache) if hasattr(gateway, '_idempotency_cache') else 0,
+        "config": {
+            "idempotency_ttl_seconds": gateway.config.idempotency_ttl_seconds if hasattr(gateway, 'config') else None,
+            "max_cache_size": gateway.config.max_cache_size if hasattr(gateway, 'config') else None,
+        }
+    }
+
+
+# ===========================================
 # RISK MANAGER
 # ===========================================
 

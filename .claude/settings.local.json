@@ -59,7 +59,8 @@
       "Bash(pip show:*)",
       "Bash(pip install:*)",
       "Bash(timeout 30 python -m pytest:*)",
-      "Bash(timeout 20 python -m pytest:*)"
+      "Bash(timeout 20 python -m pytest:*)",
+      "Bash(dir:*)"
     ]
   }
 }

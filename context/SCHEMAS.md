@@ -323,6 +323,43 @@
 | created_at | datetime | Result creation timestamp (auto-generated) |
 | error | Optional[str] | Error message if failed |
 
+### PositionConfig (backend/services/core/position_manager.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| cache_ttl_seconds | int | How long to cache live positions (default: 30) |
+| max_cache_entries | int | Maximum positions to cache (default: 500) |
+| enable_caching | bool | Whether to cache live positions (default: True) |
+| auto_refresh | bool | Auto-refresh expired cache on access (default: True) |
+
+### UnifiedPosition (backend/services/core/position_manager.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ticker | str | Market ticker (e.g., "KXBTC-24DEC31-100000") |
+| side | str | Position side ("yes" or "no") |
+| contracts | int | Number of contracts held (always positive) |
+| avg_price_cents | int | Average entry price in cents |
+| total_cost_cents | int | Total cost basis in cents |
+| total_fees_cents | int | Total fees paid in cents (default: 0) |
+| unrealized_pnl_cents | int | Unrealized P&L in cents (default: 0) |
+| source | PositionSource | Source: PAPER, LIVE, or BOTH |
+| created_at | Optional[datetime] | When position was opened |
+| market_exposure_cents | int | Current market exposure (default: 0) |
+| settlement_time | Optional[datetime] | Market settlement time |
+| metadata | Dict[str, Any] | Additional source-specific data |
+
+### ExposureSummary (backend/services/core/position_manager.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| total_exposure_cents | int | Total value at risk |
+| position_count | int | Number of open positions |
+| total_cost_cents | int | Sum of all position costs |
+| total_fees_cents | int | Sum of all fees paid |
+| by_side | Dict[str, int] | Breakdown by yes/no side |
+| by_ticker | Dict[str, int] | Breakdown by market ticker |
+
 ---
 
 ## Data Models
@@ -641,6 +678,59 @@
 | stats | Dict | Scan statistics and metrics |
 | timestamp | str | ISO timestamp of scan completion |
 
+### ReconciliationConfig (backend/services/reconciliation/reconciler.py)
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| run_interval_seconds | int | 300 | Interval between automatic reconciliation runs |
+| critical_threshold_cents | int | 1000 | Threshold for critical discrepancies |
+| critical_threshold_contracts | int | 10 | Contract threshold for critical discrepancies |
+| halt_on_critical | bool | True | Whether to halt trading on critical discrepancies |
+| auto_start | bool | False | Whether to start reconciliation automatically |
+
+### Discrepancy (backend/services/reconciliation/reconciler.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| type | DiscrepancyType | Type of discrepancy found |
+| severity | Severity | Severity level (info, warning, critical) |
+| ticker | str | Market ticker affected |
+| local_data | Optional[dict] | Local position/balance data |
+| remote_data | Optional[dict] | Kalshi API data |
+| details | dict | Additional context about the discrepancy |
+
+### TradingSignal (backend/services/core/base_strategy.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | str | Unique signal identifier |
+| strategy_type | StrategyType | Strategy that generated this signal |
+| ticker | str | Primary market ticker |
+| signal_type | SignalType | Type of signal (DIRECTIONAL, ARBITRAGE, SPREAD) |
+| edge_percent | float | Calculated edge percentage |
+| model_prob | float | Model probability estimate |
+| market_price | float | Current market price |
+| recommended_size | int | Recommended position size in contracts |
+| confidence | float | Signal confidence score 0.0-1.0 |
+| is_arbitrage | bool | True if this is an arbitrage opportunity |
+| legs | List[SignalLeg] | Individual trade legs for multi-leg signals |
+| status | SignalStatus | Current signal status |
+| created_at | datetime | Signal generation timestamp |
+| expires_at | datetime | Signal expiration timestamp |
+| notes | Optional[str] | Additional notes or context |
+
+### SignalLeg (backend/services/core/base_strategy.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| ticker | str | Market ticker for this leg |
+| side | str | 'yes' or 'no' side |
+| action | str | 'buy' or 'sell' action |
+| price_cents | int | Target price in cents |
+| strike | Optional[int] | Strike price for threshold markets |
+| bounds | Optional[tuple] | (floor, cap) for bracket markets |
+| description | str | Human-readable description of this leg |
+
 ---
 
 ## Frontend Hook Types (frontend/src/hooks/useSpotPrice.ts)
@@ -893,3 +983,51 @@
 | near_misses | NearMissRecord[] | All near-miss records |
 | forecasts | Record<string, ForecastData> | NWS forecasts by city code |
 | stats | object | Summary statistics |
+
+---
+
+## Diagnostic and Testing Types
+
+### DiagnosticResult (diagnose_infrastructure.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| component | str | Component name being tested |
+| status | 'passed' \| 'failed' \| 'warning' | Test result status |
+| message | str | Human-readable result message |
+| details | Optional[str] | Additional error details or context |
+| error | Optional[Exception] | Exception object if test failed |
+
+### SystemStatus (diagnose_infrastructure.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| database | bool | Database connectivity and schema status |
+| imports | bool | Component import success status |
+| instantiation | bool | Component creation success status |
+| tests | bool | Core test suite execution status |
+| overall | bool | Overall system health status |
+| timestamp | str | ISO timestamp of diagnostic run |
+| issues | List[str] | List of identified issues |
+| fixes_applied | List[str] | List of fixes that were applied |
+
+### TestResults (test1.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| passed | int | Number of tests that passed |
+| failed | int | Number of tests that failed |
+| warnings | int | Number of warnings generated |
+| total | int | Total number of tests run |
+| success_rate | float | Percentage of tests that passed |
+| execution_time | float | Total test execution time in seconds |
+
+### ComponentTestStatus (test1.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| module | str | Module name being tested |
+| class_name | str | Class name being tested |
+| import_success | bool | Whether module imported successfully |
+| instantiation_success | bool | Whether class could be instantiated |
+| error | Optional[str] | Error message if test failed |

@@ -38,6 +38,20 @@ class AutoTrader:
         self.is_running = False
         self._task: Optional[asyncio.Task] = None
 
+        # Optional dependencies (injected after init)
+        self.gateway = None
+        self.position_manager = None
+
+    def set_gateway(self, gateway):
+        """Set execution gateway for trade routing."""
+        self.gateway = gateway
+        logger.info("Gateway injected into AutoTrader")
+
+    def set_position_manager(self, position_manager):
+        """Set position manager for position lookups."""
+        self.position_manager = position_manager
+        logger.info("PositionManager injected into AutoTrader")
+
     async def load_config(self):
         """Load configuration from database."""
         async with self.db.connection() as conn:
@@ -182,12 +196,15 @@ class AutoTrader:
             await self._update_signal_status(signal_id, 'rejected', notes=str(e))
 
     async def _has_position(self, ticker: str) -> bool:
-        """Check if we already have a position. Will use PositionManager in Phase 2."""
-        # Check local cache first
+        """Check if we already have a position."""
+        # Use PositionManager if available (Phase 2 integration)
+        if self.position_manager:
+            return await self.position_manager.has_position(ticker, mode=self.mode)
+
+        # Fallback to local cache + DB check
         if ticker in self._position_cache:
             return True
 
-        # Fall back to DB check
         async with self.db.connection() as conn:
             cursor = await conn.execute(
                 "SELECT 1 FROM paper_positions WHERE ticker = ? AND contracts > 0 AND settled = 0",

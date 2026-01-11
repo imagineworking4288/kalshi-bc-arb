@@ -646,6 +646,32 @@ P&L tracking and metrics calculation
 | PerformanceTracker.get_strategy_breakdown | days=30 | dict | Get per-strategy metrics |
 | PerformanceTracker.get_trades | strategy_type?, status?, limit=50 | dict | Get trade history |
 
+### position_manager.py
+Unified position tracking across paper and live modes with caching
+
+| Enum | Values | Description |
+|------|--------|-------------|
+| PositionSource | PAPER, LIVE, BOTH | Source of position data |
+
+| Class | Fields | Description |
+|-------|--------|-------------|
+| PositionConfig | cache_ttl_seconds, max_cache_entries, enable_caching, auto_refresh | Position manager configuration |
+| UnifiedPosition | ticker, side, contracts, avg_price_cents, total_cost_cents, total_fees_cents, source, created_at, market_exposure_cents, settlement_time, metadata | Unified position representation |
+| ExposureSummary | total_exposure_cents, position_count, total_cost_cents, total_fees_cents, by_side, by_ticker | Portfolio exposure summary |
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| PositionManager | kalshi_client, db, config? | - | Initialize with clients and optional config |
+| PositionManager.get_positions | mode="paper", force_refresh=False | List[UnifiedPosition] | Get all positions for mode |
+| PositionManager.get_position | ticker, mode="paper", force_refresh=False | Optional[UnifiedPosition] | Get position for specific ticker |
+| PositionManager.has_position | ticker, mode="paper", side? | bool | Check if position exists |
+| PositionManager.can_open_position | ticker, side, mode="paper" | Tuple[bool, str] | Validate Kalshi YES+NO constraint |
+| PositionManager.get_exposure | mode="paper" | ExposureSummary | Get total portfolio exposure |
+| PositionManager.get_positions_by_ticker_prefix | prefix, mode="paper" | List[UnifiedPosition] | Get positions matching prefix |
+| PositionManager.get_position_count | mode="paper" | int | Count open positions |
+| PositionManager.invalidate_cache | - | None | Clear live position cache |
+| PositionManager.get_status | - | dict | Get status for dashboards |
+
 ### alert_service.py
 Real-time alerts via WebSocket
 
@@ -706,6 +732,33 @@ Historical strategy backtesting engine
 | BacktestEngine | db | - | Initialize with database |
 | BacktestEngine.run | strategy: BaseStrategy, config: BacktestConfig | BacktestResult | Run backtest for single strategy |
 | BacktestEngine.run_multiple | strategies: List[BaseStrategy], config | Dict[str, BacktestResult] | Run backtest for multiple strategies |
+
+### execution_gateway.py
+Single entry point for all trade execution with risk checks
+
+| Class | Fields | Description |
+|-------|--------|-------------|
+| GatewayConfig | idempotency_ttl_seconds=300, max_cache_size=1000, require_risk_check=True, require_circuit_check=True, default_timeout_seconds=30.0 | Gateway configuration |
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| ExecutionGateway | kalshi_client, paper_service, risk_manager, circuit_breaker, fee_calculator, db, alert_service, config? | - | Initialize unified execution gateway |
+| ExecutionGateway.execute_single | ticker, side, action, contracts, price_cents, mode="paper", source="manual" | BatchResult | Execute single order with full pipeline |
+| ExecutionGateway.execute_arbitrage | legs: List[dict], contracts_per_leg: int, mode="paper", source="strategy" | BatchResult | Execute arbitrage trade with validation |
+| ExecutionGateway.execute_batch | legs: List[OrderLeg], mode="paper", source="strategy", atomic=True | BatchResult | Execute batch of orders with risk checks |
+| ExecutionGateway.estimate_cost | legs: List[dict] | dict | Estimate costs and fees before execution |
+| ExecutionGateway.get_stats | - | dict | Get gateway execution statistics |
+
+### fee_calculator.py
+Consolidated fee calculation service
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| FeeCalculator | - | - | Initialize consolidated fee calculator |
+| FeeCalculator.calculate | contracts: int, price_cents: int, is_maker: bool = False | int | Calculate Kalshi fees in cents |
+| FeeCalculator.calculate_for_legs | legs: List[dict] | int | Calculate total fees for multi-leg trade |
+| FeeCalculator.calculate_batch | legs: List[OrderLeg] | dict | Calculate fees for BatchExecutor legs |
+| FeeCalculator.get_fee_rate | price_cents: int | float | Get fee rate for price level |
 
 ---
 
@@ -786,6 +839,101 @@ Logging utilities with console output and in-memory activity buffer for UI displ
 | setup_logger | name: str, activity_buffer: ActivityBuffer = None | Logger | Setup logger with console, file, and optional activity handlers |
 | btc_arb_logger | - | Logger | Module-level logger for BTC arbitrage scanning |
 | btc_arb_activity | - | ActivityBuffer | Module-level activity buffer for UI display |
+
+## backend/services/reconciliation/
+
+### reconciler.py
+Position and balance reconciliation service to detect discrepancies between local state and Kalshi
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| DiscrepancyType | - | Enum | Types of discrepancies: missing_local, missing_remote, quantity_mismatch, balance_mismatch |
+| Severity | - | Enum | Severity levels: info, warning, critical |
+| Discrepancy | type: DiscrepancyType, severity: Severity, ticker: str, details: dict | dataclass | Represents a detected discrepancy with context |
+| ReconciliationConfig | run_interval_seconds: int = 300, critical_threshold_cents: int = 1000, halt_on_critical: bool = True, auto_start: bool = False | dataclass | Configuration for reconciliation behavior |
+| ReconciliationService.__init__ | kalshi_client, position_manager, alert_service, circuit_breaker, db, config: Optional[ReconciliationConfig] | - | Initialize reconciliation service with dependencies |
+| ReconciliationService.start | - | None | Start automated reconciliation loop |
+| ReconciliationService.stop | - | None | Stop reconciliation loop |
+| ReconciliationService.reconcile_now | mode: str = "live" | List[Discrepancy] | Run immediate reconciliation and return discrepancies found |
+
+## backend/services/strategies/
+
+### __init__.py
+Strategy module exports with registry system
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| register_strategy | strategy_class | function | Decorator to register strategy classes with their type |
+| get_strategy_class | strategy_type: StrategyType | Type[BaseStrategy] | Get strategy class by type (last registered wins) |
+| get_all_strategies | - | Dict[StrategyType, Type[BaseStrategy]] | Get mapping of all registered strategies |
+| get_registered_types | - | List[StrategyType] | Get list of all registered strategy types |
+| get_all_strategy_classes | - | List[Type[BaseStrategy]] | Get all strategy classes regardless of type overlap |
+
+### btc_arb_strategy.py
+BTC arbitrage strategy for range vs threshold markets
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| BTCArbitrageStrategy.__init__ | kalshi_client, min_edge_percent: float = 3.0, scan_interval: float = 5.0 | - | Initialize BTC arbitrage strategy with configuration |
+| BTCArbitrageStrategy.scan | - | List[TradingSignal] | Scan for BTC arbitrage opportunities between range/threshold markets |
+
+### btc_directional_strategy.py
+BTC directional strategy using logistic probability model
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| BTCDirectionalStrategy.__init__ | kalshi_client, spot_client: Optional[SpotPriceClient], min_edge_percent: float = 8.0, base_volatility_percent: float = 1.5, scan_interval: float = 10.0 | - | Initialize BTC directional strategy with logistic model |
+| BTCDirectionalStrategy.scan | - | List[TradingSignal] | Scan for mispriced BTC threshold markets using logistic probability |
+
+### weather_strategy.py
+Weather bracket arbitrage and directional trading strategy
+
+| Class/Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| WeatherStrategy.__init__ | kalshi_client, nws_client: Optional[NWSClient], min_edge_percent: float = 3.0, min_directional_edge: float = 5.0, scan_interval: float = 30.0 | - | Initialize weather strategy with NWS integration |
+| WeatherStrategy.scan | - | List[TradingSignal] | Scan weather markets for bracket arbitrage and directional opportunities |
+
+---
+
+## Root Scripts and Utilities
+
+### diagnose_infrastructure.py
+Comprehensive infrastructure diagnostic tool for database schema, component imports, and system validation
+
+| Function/Class | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| Colors | - | - | ANSI color codes class for colored terminal output |
+| log_ok | msg: str | None | Print success message in green |
+| log_fail | msg: str, details: str = "" | None | Print failure message in red with optional details |
+| log_warn | msg: str, details: str = "" | None | Print warning message in yellow |
+| log_info | msg: str, details: str = "" | None | Print info message in cyan |
+| DiagnosticSuite | - | - | Main diagnostic coordinator class |
+| DiagnosticSuite.run | fix_issues: bool = False, verbose: bool = False | bool | Run complete diagnostic suite with optional fixes |
+| DiagnosticSuite._check_database | - | Tuple[bool, List[str]] | Verify database schema and tables |
+| DiagnosticSuite._check_component_imports | - | Tuple[bool, List[str]] | Test all component imports |
+| DiagnosticSuite._check_component_instantiation | - | Tuple[bool, List[str]] | Test component creation |
+| DiagnosticSuite._run_core_tests | - | Tuple[bool, List[str]] | Execute core component tests |
+| DiagnosticSuite._fix_database_issues | issues: List[str] | bool | Attempt to fix database schema problems |
+| DiagnosticSuite._generate_summary_report | results: Dict | None | Generate DIAGNOSTIC_SUMMARY.md report |
+| main | - | int | CLI entry point with argument parsing |
+
+### test1.py
+Quick validation test suite for new trading infrastructure components
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| log_pass | msg: str | None | Record and display passed test |
+| log_fail | msg: str, error: str = None | None | Record and display failed test with optional error |
+| log_warn | msg: str | None | Record and display warning |
+| section | title: str | None | Print formatted test section header |
+| test_imports | - | None | Test import of all infrastructure modules |
+| test_component_creation | - | None | Test instantiation of core components |
+| test_database_operations | - | None | Test database connectivity and operations |
+| test_signal_lifecycle | - | None | Test trading signal creation and management |
+| test_execution_pipeline | - | None | Test order execution pathway |
+| test_risk_management | - | None | Test risk manager and circuit breaker |
+| test_performance_tracking | - | None | Test performance metrics calculation |
+| main | - | int | Main test runner with summary reporting |
 
 ---
 
@@ -1023,6 +1171,41 @@ Weather arbitrage scanner with forecast highlighting and bracket sorting
 | isForecastInBracket | bracket: BracketMarket, forecastTemp: number | boolean | Check if forecast temperature falls within bracket's floor_strike to cap_strike range |
 | WeatherArbitrageSection | - | JSX.Element | 7-city grid with NWS forecasts, expandable bracket tables, forecast row highlighting |
 | BracketTable | city, type, onTypeChange, onClose | JSX.Element | Modal table showing sorted bracket prices with forecast highlighting using Kalshi strike fields |
+
+### ExecutionPanel.tsx
+Trade execution panel with order management and risk controls
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| ExecutionPanel | opportunity, onExecute, onCancel | JSX.Element | Order execution interface with position sizing, slippage controls, and execution confirmation |
+
+### OrderBook.tsx
+Real-time order book display component
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| OrderBook | ticker: string | JSX.Element | Live order book with bid/ask levels, depth visualization, and price updates |
+
+### PredictionPanel.tsx
+Weather prediction analysis panel with NWS integration
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| PredictionPanel | city: string, marketType: 'high' \| 'low' | JSX.Element | Forecast display with temperature probabilities and bracket recommendations |
+
+### PredictionTab.tsx
+Weather prediction tab interface with city selection
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| PredictionTab | - | JSX.Element | City selection interface with forecast analysis and market recommendations |
+
+### RiskDashboard.tsx
+Risk monitoring and circuit breaker dashboard
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| RiskDashboard | - | JSX.Element | Real-time risk metrics, position limits, circuit breaker status, and manual controls |
 
 ### shared/StatsBar.tsx
 Reusable statistics display component
