@@ -900,6 +900,50 @@
 
 ---
 
+## Reconciliation Schemas (backend/services/reconciliation/)
+
+### DiscrepancyType (reconciler.py)
+
+| Value | Description |
+|-------|-------------|
+| missing_local | Position on Kalshi not tracked locally |
+| missing_remote | Local position not on Kalshi |
+| quantity_mismatch | Contract counts don't match |
+| balance_mismatch | Account balance mismatch |
+| stale_position | Position not updated in expected time |
+
+### Severity (reconciler.py)
+
+| Value | Description |
+|-------|-------------|
+| info | Informational discrepancy |
+| warning | Warning-level discrepancy |
+| critical | Critical discrepancy requiring attention |
+
+### Discrepancy (reconciler.py)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| type | DiscrepancyType | Type of discrepancy detected |
+| severity | Severity | Severity level of the discrepancy |
+| ticker | str \| null | Market ticker if applicable |
+| description | str | Human-readable description |
+| local_value | str \| null | Local state value |
+| remote_value | str \| null | Remote (Kalshi) state value |
+| detected_at | datetime | When discrepancy was detected |
+
+### ReconciliationConfig (reconciler.py)
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| run_interval_seconds | int | 300 | Reconciliation loop interval (5 minutes) |
+| critical_threshold_cents | int | 1000 | Balance discrepancy threshold for critical alert |
+| critical_threshold_contracts | int | 10 | Contract discrepancy threshold for critical alert |
+| halt_on_critical | bool | True | Whether to trip circuit breaker on critical discrepancy |
+| auto_start | bool | False | Whether to start background loop automatically |
+
+---
+
 ## Weather Types (frontend/src/types/weather.ts)
 
 ### BracketMarket

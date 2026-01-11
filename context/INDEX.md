@@ -202,6 +202,15 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/src/components/btcarb/BTCArbitrageTab.tsx | BTC-specific arbitrage scanning interface |
 | frontend/src/components/portfolio/PortfolioTab.tsx | Portfolio overview and position tracking |
 | frontend/src/components/trading/TradingTab.tsx | Manual trading interface |
+| frontend/src/components/analytics/AnalyticsTab.tsx | Analytics dashboard for performance metrics |
+| frontend/src/components/opportunities/ExecuteModal.tsx | Modal dialog for executing trading opportunities |
+| frontend/src/components/opportunities/OpportunitiesTab.tsx | Tab for viewing and managing opportunities |
+| frontend/src/components/opportunities/OpportunityCard.tsx | Card component for individual opportunities |
+| frontend/src/components/trading/ModeBanner.tsx | Banner indicating current trading mode |
+| frontend/src/components/trading/ModeToggle.tsx | Toggle component for switching trading modes |
+| frontend/src/components/trading/PositionList.tsx | List component for displaying positions |
+| frontend/src/components/trading/TradeHistory.tsx | Component for viewing trade history |
+| frontend/src/components/watchlist/WatchlistTab.tsx | Tab for managing market watchlists |
 | frontend/src/hooks/usePredictions.ts | Weather prediction data fetching hook |
 | frontend/src/hooks/useSpotPrice.ts | Live BTC price polling hook |
 | frontend/src/services/api.ts | Backend HTTP API client |
