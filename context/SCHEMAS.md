@@ -53,6 +53,42 @@
 | realized_pnl | REAL | Realized profit/loss |
 | trade_id | TEXT | Parent trade group ID |
 
+### execution_audit
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | TEXT PRIMARY KEY | UUID execution identifier |
+| request_id | TEXT UNIQUE | Unique request identifier for tracking |
+| created_at | TIMESTAMP | Execution timestamp |
+| source | TEXT | Execution source: 'orchestrator', 'manual', 'auto_trader', 'btc_arb', 'strategy' |
+| signal_id | TEXT | Associated trading signal ID |
+| mode | TEXT | Trading mode: 'paper', 'live', 'dual' |
+| legs_json | TEXT | JSON array of trade legs |
+| atomic | INTEGER | 1 for atomic execution, 0 for best-effort |
+| max_slippage_cents | INTEGER | Maximum allowed slippage in cents |
+| success | INTEGER | 1 for success, 0 for failure |
+| total_cost_cents | INTEGER | Total execution cost in cents |
+| total_fees_cents | INTEGER | Total fees paid in cents |
+| execution_time_ms | INTEGER | Execution duration in milliseconds |
+| leg_results_json | TEXT | JSON array of individual leg results |
+| error | TEXT | Error message if execution failed |
+
+### circuit_breaker_state
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | INTEGER PRIMARY KEY | Always 1, singleton table |
+| tripped | INTEGER | 1 if circuit breaker is tripped, 0 otherwise |
+| trip_reason | TEXT | Reason for last trip |
+| trip_time | TIMESTAMP | When circuit breaker was last tripped |
+| permanent | INTEGER | 1 if permanent trip, 0 for temporary |
+| consecutive_losses | INTEGER | Count of consecutive losing trades |
+| daily_loss_cents | INTEGER | Total daily losses in cents |
+| hourly_trades_json | TEXT | JSON array of hourly trade counts |
+| hourly_exposure_json | TEXT | JSON array of hourly exposure amounts |
+| last_reset_date | TEXT | Date of last daily reset |
+| updated_at | TIMESTAMP | Last update timestamp |
+
 ### paper_trades
 
 | Field | Type | Description |
@@ -179,9 +215,9 @@
 | kalshi_response | TEXT | JSON response from Kalshi batch order |
 | settled_at | TIMESTAMP | When arbitrage settled |
 | settlement_outcome | TEXT | Settlement result description |
+| audit_id | TEXT | Foreign key to execution_audit table |
 | actual_payout_cents | INTEGER | Actual payout received |
 | actual_profit_cents | INTEGER | Actual profit after settlement |
-| audit_id | TEXT | Execution audit trail ID (added in migration 001) |
 
 ### btc_arb_config
 

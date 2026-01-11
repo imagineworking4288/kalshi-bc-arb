@@ -1284,6 +1284,15 @@ Windows batch 4-terminal launcher
 |-------------|
 | Launch frontend, backend, scanners, and log viewer in Windows Terminal tabs |
 
+### test_integration_startup.py
+Integration test suite verifying complete application startup
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| wait_for_startup | proc: subprocess.Popen, timeout: int = 20 | bool | Wait for server to be ready by polling health endpoint |
+| test_endpoint | name: str, method: str, path: str, expected_status: int = 200, json_body: dict = None | bool | Test single API endpoint with timeout and status validation |
+| main | - | int | Start server on port 8099, test all endpoints, cleanup on exit |
+
 ---
 
 ## frontend/src/types/

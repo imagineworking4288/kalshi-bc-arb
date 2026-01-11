@@ -1,8 +1,11 @@
 from fastapi import APIRouter, HTTPException, Query, Request
 from typing import Optional
 from datetime import datetime, timezone
+import logging
 
 from ..config import get_settings
+
+logger = logging.getLogger(__name__)
 from ..database.connection import db
 from ..models.schemas import ExecuteRequest, ResetRequest, TradeRequest, WatchlistAddRequest
 from ..services.kalshi_client import KalshiClient
@@ -601,13 +604,23 @@ async def get_signals(status: Optional[str] = None, limit: int = 50):
 # ===========================================
 btc_arb_engine_instance: Optional['BTCArbitrageEngine'] = None
 
+
 def get_btc_arb_engine():
+    """Get the BTC arb engine instance."""
     global btc_arb_engine_instance
     if btc_arb_engine_instance is None:
-        from ..services.btc_arb_engine import BTCArbitrageEngine
-        kalshi = KalshiClient()
-        btc_arb_engine_instance = BTCArbitrageEngine(kalshi, db)
+        raise RuntimeError(
+            "BTCArbitrageEngine not initialized. "
+            "Ensure main.py lifespan calls set_btc_arb_engine() before any requests."
+        )
     return btc_arb_engine_instance
+
+
+def set_btc_arb_engine(engine: 'BTCArbitrageEngine'):
+    """Set the BTC arb engine instance (called from main.py lifespan)."""
+    global btc_arb_engine_instance
+    btc_arb_engine_instance = engine
+    logger.info("BTCArbitrageEngine registered with routes")
 
 
 # ===========================================

@@ -63,6 +63,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | run_scanners.py | `python run_scanners.py` | Run weather and BTC scanners independently |
 | run_logs.py | `python run_logs.py` | Run colored log viewer with filtering |
 | test_core_components.py | `python test_core_components.py` | Test core trading infrastructure |
+| test_integration_startup.py | `python test_integration_startup.py` | Test complete application startup sequence |
 
 ## File Tree
 
@@ -224,5 +225,6 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | test_core_components.py | Core trading infrastructure component test suite |
 | diagnose_infrastructure.py | Comprehensive diagnostic tool for database schema, component imports, and system validation |
 | test1.py | Quick validation test suite for new trading infrastructure components |
+| test_integration_startup.py | Integration test suite verifying startup sequence |
 | test_results.json | Test execution results in JSON format for automated processing |
 | DIAGNOSTIC_SUMMARY.md | Infrastructure diagnostic status report with component and database validation results |

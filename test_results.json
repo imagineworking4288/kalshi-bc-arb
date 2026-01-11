@@ -1,5 +1,5 @@
 {
-  "test_run_timestamp": "2026-01-11T05:23:42.317540Z",
+  "test_run_timestamp": "2026-01-11T05:53:22.490850Z",
   "overall_status": "PASS",
   "summary": {
     "total_tests": 11,
@@ -40,7 +40,7 @@
         {
           "method": "TradingSignal creation",
           "success": true,
-          "result": "Created signal with id=707d309c...",
+          "result": "Created signal with id=da260080...",
           "error": null
         },
         {
@@ -78,7 +78,7 @@
         {
           "method": "create()",
           "success": true,
-          "result": "Created signal 8d5328ce...",
+          "result": "Created signal 3918979c...",
           "error": null
         },
         {
@@ -114,7 +114,7 @@
         {
           "method": "get_history()",
           "success": true,
-          "result": "Got 6 history records",
+          "result": "Got 7 history records",
           "error": null
         },
         {
@@ -364,7 +364,7 @@
         {
           "method": "record_trade()",
           "success": true,
-          "result": "Recorded trade a4a338fa...",
+          "result": "Recorded trade a3073539...",
           "error": null
         },
         {
@@ -382,7 +382,7 @@
         {
           "method": "get_metrics()",
           "success": true,
-          "result": "trades=8, win_rate=10000.00%",
+          "result": "trades=10, win_rate=10000.00%",
           "error": null
         },
         {

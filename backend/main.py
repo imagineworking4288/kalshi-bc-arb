@@ -158,8 +158,13 @@ async def lifespan(app: FastAPI):
     routes.auto_trader_instance = auto_trader
     logger.info(f"AutoTrader initialized (mode: {auto_trader._mode_name()})")
 
-    btc_arb_engine = routes.get_btc_arb_engine()
-    btc_arb_engine.set_gateway(gateway)
+    # Create BTCArbitrageEngine with gateway (required argument)
+    btc_arb_engine = BTCArbitrageEngine(
+        kalshi_client=kalshi_client,
+        db=db,
+        gateway=gateway
+    )
+    routes.set_btc_arb_engine(btc_arb_engine)
     await btc_arb_engine.start()
     logger.info("BTC Arbitrage Engine started")
 
