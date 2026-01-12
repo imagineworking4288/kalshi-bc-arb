@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 
-from .fee_calculator import calculate_fee, FeeResult
+from ..core.fee_calculator import calculate_fee, FeeResult
 
 
 class RecommendationAction(str, Enum):

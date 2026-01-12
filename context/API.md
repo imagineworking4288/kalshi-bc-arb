@@ -284,14 +284,6 @@ Detect arbitrage opportunities between threshold and bracket markets
 | ArbitrageDetector.find_opportunities | groups: List[MarketGroup] | List[ArbitrageOpportunity] | Find all profitable arbitrage opportunities |
 | ArbitrageDetector._analyze_threshold | threshold, brackets, group | Optional[ArbitrageOpportunity] | Analyze single threshold against brackets |
 
-### fee_calculator.py
-Kalshi trading fee calculations
-
-| Class/Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| OrderLeg | ticker, side, contracts, price | dataclass | Single order leg data |
-| calculate_fee | contracts: int, price: float | float | Kalshi fee: ceil(0.07 * contracts * price * (1-price)) |
-| calculate_arbitrage_cost | legs: List[OrderLeg] | dict | Total cost, fees, payout, profit for multi-leg trade |
 
 ### paper_trading.py
 Simulated paper trading service
@@ -341,40 +333,7 @@ Saved markets management with live price updates
 | WatchlistService.remove | ticker: str | bool | Delete market from watchlist |
 | WatchlistService.get_all | - | List[dict] | Get all watchlist items with fresh prices from Kalshi |
 
-### edge_detector.py
-Market edge detection using probability models
 
-| Class/Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| EdgeDetector | kalshi_client, db | - | Initialize with Kalshi client and database connection |
-| EdgeDetector.load_config | - | None | Load minimum edge threshold from database |
-| EdgeDetector.scan_btc_markets | - | List[TradingSignal] | Scan Bitcoin markets for pricing edges |
-| EdgeDetector._analyze_btc_market | market: dict, current_btc: float | TradingSignal \| None | Analyze single BTC market for edge opportunities |
-| EdgeDetector._parse_btc_strike | ticker: str | float \| None | Extract strike price from BTC market ticker |
-| EdgeDetector._calculate_btc_probability | current: float, strike: float, market: dict | float | Calculate probability using logistic function |
-| EdgeDetector._calculate_position_size | edge_percent: float | int | Kelly Criterion position sizing |
-| EdgeDetector.save_signal | signal: TradingSignal | int | Save trading signal to database |
-| EdgeDetector.get_pending_signals | - | List[dict] | Get all pending signals from database |
-| TradingSignal | ticker, signal_type, edge_percent, model_prob, market_price, recommended_size, source | - | Dataclass for trading signal data |
-
-### auto_trader.py
-Automated trading engine with risk management
-
-| Class/Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| AutoTrader | kalshi_client, db | - | Initialize with Kalshi client and database connection |
-| AutoTrader.load_config | - | None | Load configuration from database |
-| AutoTrader.start | - | None | Start background trading loop |
-| AutoTrader.stop | - | None | Stop background trading loop |
-| AutoTrader.get_status | - | dict | Get current status and configuration |
-| AutoTrader.update_config | **kwargs | dict | Update configuration parameters |
-| AutoTrader.manual_scan | - | List[TradingSignal] | Run edge scan without executing trades |
-| AutoTrader._run_loop | - | None | Main trading loop (runs every 60 seconds) |
-| AutoTrader._scan_and_trade | - | None | Scan for edges and execute qualifying trades |
-| AutoTrader._process_signal | signal: TradingSignal | None | Process single trading signal with risk checks |
-| AutoTrader._has_position | ticker: str | bool | Check if already have position in market |
-| AutoTrader._position_count | - | int | Count current open positions |
-| AutoTrader._check_daily_loss | - | bool | Verify daily loss limit not exceeded |
 
 ### btc_arb_scanner.py
 BTC arbitrage opportunity detection between range and threshold markets
@@ -397,23 +356,6 @@ BTC arbitrage opportunity detection between range and threshold markets
 | BTCArbitrageScanner.calculate_trade | opportunity, budget_cents | dict | Calculate trade details for given budget |
 | BTCArbitrageScanner.get_stats | - | dict | Get scanner performance statistics |
 
-### btc_arb_engine.py
-Continuous BTC arbitrage scanning and execution engine
-
-| Class/Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| EngineConfig | min_edge_percent, budget_cents, auto_trade_enabled, mode, scan_interval_seconds | dataclass | Engine configuration parameters |
-| EngineStatus | is_running, last_scan_at, opportunities_found, auto_executions, last_error | dataclass | Engine runtime status |
-| BTCArbitrageEngine | kalshi_client, db | - | Background engine for continuous BTC arbitrage |
-| BTCArbitrageEngine.start | - | None | Start background scanning loop |
-| BTCArbitrageEngine.stop | - | None | Stop background scanning loop |
-| BTCArbitrageEngine.get_status | - | dict | Get current engine status and config |
-| BTCArbitrageEngine.get_full_status | - | dict | Get complete status including market data, categorized calculations (near_misses, profitable), and activity log |
-| BTCArbitrageEngine.get_opportunities | - | List[dict] | Get current detected opportunities |
-| BTCArbitrageEngine.update_config | **kwargs | dict | Update engine configuration |
-| BTCArbitrageEngine.manual_execute | opportunity_id | dict | Manually execute specific opportunity |
-| BTCArbitrageEngine._run_loop | - | None | Main scanning loop (every 2 seconds) |
-| BTCArbitrageEngine._auto_execute | opportunity | None | Auto-execute best opportunity with safety controls |
 
 ### log_config.py
 Centralized logging configuration with colored output
@@ -475,16 +417,6 @@ SQLite database for scanner results
 | ScannerDatabase.get_scanner_result | scanner_type: str | Optional[Dict] | Get latest scanner result |
 | ScannerDatabase.get_scanner_stats | scanner_type: str | Dict | Get scanner performance statistics |
 
-### scanner_service.py
-Unified scanner service that runs all scanners
-
-| Class/Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| ScannerService | - | - | Service running BTC and weather scanners |
-| ScannerService.run_btc_scanner | - | None | Run BTC scanner loop every 2s |
-| ScannerService.run_weather_scanner | - | None | Run weather scanner loop every 30s |
-| ScannerService.start | - | None | Start all scanners concurrently |
-| ScannerService.stop | - | None | Stop all running scanners |
 
 ### weather_arb_scanner.py
 Weather arbitrage scanner for 14 market series (7 cities × 2 types)

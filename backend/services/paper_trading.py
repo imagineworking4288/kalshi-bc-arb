@@ -6,7 +6,7 @@ from dataclasses import dataclass, asdict
 
 from ..database.connection import db
 from ..config import get_settings
-from .fee_calculator import calculate_fee
+from .core.fee_calculator import calculate_fee
 from .arbitrage_detector import ArbitrageOpportunity
 
 

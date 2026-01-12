@@ -27,8 +27,9 @@ from .services.paper_trading import PaperTradingService
 from .services.kalshi_client import KalshiClient
 from .services.nws.client import NWSProductionClient
 from .services.spot_price_client import SpotPriceClient
-from .services.auto_trader import AutoTrader
-from .services.btc_arb_engine import BTCArbitrageEngine
+# REMOVED: Legacy engines (now using StrategyOrchestrator)
+# from .services.auto_trader import AutoTrader
+# from .services.btc_arb_engine import BTCArbitrageEngine
 from .services.reconciliation import ReconciliationService, ReconciliationConfig
 
 # Strategies
@@ -148,25 +149,15 @@ async def lifespan(app: FastAPI):
     routes.set_orchestrator(orchestrator)
 
     # ═══════════════════════════════════════════════════════════════
-    # LEGACY ENGINES (with gateway integration)
+    # START SCANNING (replaces external scanner process)
     # ═══════════════════════════════════════════════════════════════
-
-    auto_trader = AutoTrader(kalshi_client, db)
-    auto_trader.set_gateway(gateway)
-    auto_trader.set_position_manager(position_manager)
-    await auto_trader.load_config()
-    routes.auto_trader_instance = auto_trader
-    logger.info(f"AutoTrader initialized (mode: {auto_trader._mode_name()})")
-
-    # Create BTCArbitrageEngine with gateway (required argument)
-    btc_arb_engine = BTCArbitrageEngine(
-        kalshi_client=kalshi_client,
-        db=db,
-        gateway=gateway
-    )
-    routes.set_btc_arb_engine(btc_arb_engine)
-    await btc_arb_engine.start()
-    logger.info("BTC Arbitrage Engine started")
+    # The orchestrator handles all scanning internally.
+    # No need for external run_scanners.py anymore.
+    if settings.auto_start_scanning:
+        await orchestrator.start()
+        logger.info("Orchestrator scanning started automatically")
+    else:
+        logger.info("Orchestrator ready (scanning not auto-started)")
 
     # ═══════════════════════════════════════════════════════════════
     # RECONCILIATION
@@ -192,8 +183,6 @@ async def lifespan(app: FastAPI):
     app.state.risk_manager = risk
     app.state.alert_service = alerts
     app.state.orchestrator = orchestrator
-    app.state.auto_trader = auto_trader
-    app.state.btc_arb_engine = btc_arb_engine
     app.state.gateway = gateway
     app.state.position_manager = position_manager
     app.state.fee_calculator = fee_calculator
@@ -230,28 +219,13 @@ async def lifespan(app: FastAPI):
     print("\nShutting down...")
     logger.info("Shutting down...")
 
-    # Stop Strategy Orchestrator first
+    # Stop Strategy Orchestrator
     try:
         if orchestrator._is_running:
             await orchestrator.stop()
             print("[SHUTDOWN] Strategy Orchestrator stopped")
     except Exception as e:
         print(f"[SHUTDOWN] Error stopping Strategy Orchestrator: {e}")
-
-    # Stop AutoTrader
-    try:
-        if auto_trader.is_running:
-            await auto_trader.stop()
-            print("[SHUTDOWN] AutoTrader stopped")
-    except Exception as e:
-        print(f"[SHUTDOWN] Error stopping AutoTrader: {e}")
-
-    # Shutdown BTC arbitrage engine
-    try:
-        await btc_arb_engine.stop()
-        print("[SHUTDOWN] BTC Arbitrage Engine stopped")
-    except Exception as e:
-        print(f"[SHUTDOWN] Error stopping BTC arbitrage engine: {e}")
 
     # Stop ReconciliationService
     try:

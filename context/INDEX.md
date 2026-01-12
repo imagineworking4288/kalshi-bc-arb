@@ -16,17 +16,18 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 ## Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend       │    │   Scanners      │    │   Log Viewer    │
-│   React/TS      │◄──►│   FastAPI       │◄──►│   BTC/Weather   │◄──►│   Colored       │
-│   :5173         │    │   :8001         │    │   SQLite Write  │    │   Filter        │
-└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
-        │                      │                      │                        │
-        ├─ App.tsx            ├─ main.py             ├─ run_scanners.py      ├─ run_logs.py
-        ├─ Stores             ├─ API Routes          ├─ Scanner Service       ├─ Log Viewer
-        ├─ Components         ├─ Services            ├─ Weather Scanner       └─ Filtering
-        └─ Services           ├─ Database            └─ BTC Scanner
-                              └─ Utils (Auth)
+┌─────────────────┐    ┌─────────────────────────────────┐    ┌─────────────────┐
+│   Frontend      │    │         Backend                 │    │   Log Viewer    │
+│   React/TS      │◄──►│        FastAPI                  │◄──►│   Colored       │
+│   :5173         │    │ :8001 (includes scanners)       │    │   Filter        │
+└─────────────────┘    └─────────────────────────────────┘    └─────────────────┘
+        │                              │                              │
+        ├─ App.tsx                    ├─ main.py                    ├─ run_logs.py
+        ├─ Stores                     ├─ API Routes                 ├─ Log Viewer
+        ├─ Components                 ├─ Strategy Orchestrator      └─ Filtering
+        └─ Services                   ├─ BTC/Weather Strategies
+                                      ├─ Database
+                                      └─ Utils (Auth)
 ```
 
 ## Module Map
@@ -40,8 +41,6 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/services/core | backend/services/core/ | Unified trading infrastructure (orchestrator, signals, risk, etc.) |
 | backend/services/analysis | backend/services/analysis/ | Analysis tools and probability calculators |
 | backend/services/nws | backend/services/nws/ | National Weather Service API client and configuration |
-| backend/services/execution | backend/services/execution/ | Order execution and validation components |
-| backend/services/risk | backend/services/risk/ | Risk management and monitoring |
 | backend/services/websocket | backend/services/websocket/ | WebSocket data synchronization |
 | backend/services/reconciliation | backend/services/reconciliation/ | Position and balance reconciliation between local and Kalshi |
 | backend/services/strategies | backend/services/strategies/ | BaseStrategy implementations for weather and BTC trading |
@@ -60,7 +59,6 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | File | Command | When to use |
 |------|---------|-------------|
 | backend/main.py | `uvicorn backend.main:app --reload` | Start FastAPI backend server |
-| run_scanners.py | `python run_scanners.py` | Run weather and BTC scanners independently |
 | run_logs.py | `python run_logs.py` | Run colored log viewer with filtering |
 | test_core_components.py | `python test_core_components.py` | Test core trading infrastructure |
 | test_integration_startup.py | `python test_integration_startup.py` | Test complete application startup sequence |
@@ -107,7 +105,6 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/services/__init__.py | Services module exports all classes |
 | backend/services/arbitrage_calculator.py | Three-strategy arbitrage calculator for mutually exclusive brackets |
 | backend/services/arbitrage_detector.py | Finds profitable arbitrage opportunities |
-| backend/services/fee_calculator.py | Kalshi fee calculation logic |
 | backend/services/kalshi_client.py | Kalshi REST API client |
 | backend/services/market_classifier.py | Classifies markets as threshold/bracket |
 | backend/services/paper_trading.py | Simulated paper trading service |
@@ -115,10 +112,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/services/spot_price_client.py | Free API BTC price client (CoinGecko/CoinLore) |
 | backend/services/trade_executor.py | Routes trades to paper or live |
 | backend/services/watchlist_service.py | Saved markets management service |
-| backend/services/edge_detector.py | Detects mispriced markets using probability models |
-| backend/services/auto_trader.py | Automated trading engine with risk management |
 | backend/services/btc_arb_scanner.py | BTC arbitrage opportunity detection scanner |
-| backend/services/btc_arb_engine.py | Continuous BTC arbitrage scanning engine |
 | backend/services/log_config.py | Centralized logging with colored output |
 | backend/services/log_viewer.py | Real-time log viewer with filtering |
 | backend/services/nws_client.py | National Weather Service API client |
@@ -126,7 +120,6 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/services/nws/client.py | Production NWS client with Open-Meteo fallback |
 | backend/services/nws/config.py | NWS grid points and cache configuration |
 | backend/services/scanner_db.py | SQLite database for scanner results |
-| backend/services/scanner_service.py | Unified scanner service runner |
 | backend/services/weather_arb_scanner.py | Weather arbitrage scanner for 14 series |
 | backend/services/core/__init__.py | Core module exports all trading infrastructure |
 | backend/services/core/base_strategy.py | BaseStrategy ABC and TradingSignal dataclass |
@@ -144,17 +137,9 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/services/core/backtest_engine.py | Historical strategy backtesting engine |
 | backend/services/analysis/__init__.py | Analysis module exports |
 | backend/services/analysis/arbitrage_calculator.py | Enhanced arbitrage calculator with fee handling |
-| backend/services/analysis/fee_calculator.py | Advanced fee calculation engine |
 | backend/services/analysis/position_calculator.py | Position sizing and portfolio calculations |
 | backend/services/analysis/prediction_engine_v2.py | Enhanced prediction engine with fee-aware calculations |
 | backend/services/analysis/probability_engine.py | Weather probability modeling engine |
-| backend/services/execution/__init__.py | Execution module exports |
-| backend/services/execution/atomic_executor.py | Atomic multi-leg order execution |
-| backend/services/execution/order_manager.py | Order lifecycle management |
-| backend/services/execution/validator.py | Trade validation and safety checks |
-| backend/services/risk/__init__.py | Risk module exports |
-| backend/services/risk/circuit_breaker.py | Enhanced circuit breaker with multiple triggers |
-| backend/services/risk/risk_monitor.py | Real-time risk monitoring service |
 | backend/services/websocket/__init__.py | WebSocket module exports |
 | backend/services/websocket/data_sync.py | Real-time data synchronization |
 | backend/services/websocket/manager.py | WebSocket connection management |
@@ -221,7 +206,6 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/src/types/weather.ts | Weather arbitrage type definitions |
 | frontend/src/utils/format.ts | Currency and time formatters |
 | run_logs.py | Log viewer entry point |
-| run_scanners.py | Scanner service entry point |
 | test_core_components.py | Core trading infrastructure component test suite |
 | diagnose_infrastructure.py | Comprehensive diagnostic tool for database schema, component imports, and system validation |
 | test1.py | Quick validation test suite for new trading infrastructure components |

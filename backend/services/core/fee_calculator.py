@@ -62,6 +62,10 @@ class FeeType(Enum):
     MAKER = "maker"
 
 
+# Backwards compatibility alias
+OrderType = FeeType
+
+
 @dataclass
 class FeeCalculation:
     """
@@ -80,6 +84,21 @@ class FeeCalculation:
     total_cost_cents: int
     fee_type: FeeType
     fee_rate: float
+
+
+@dataclass
+class FeeResult:
+    """
+    Backwards compatibility: Result of fee calculation.
+    Mirrors the old analysis.fee_calculator.FeeResult interface.
+    """
+    fee_cents: float
+    fee_dollars: float
+    is_maker: bool
+    was_capped: bool = False
+    raw_fee_cents: float = 0.0
+    notional_dollars: float = 0.0
+    effective_rate: float = 0.0
 
 
 class FeeCalculator:

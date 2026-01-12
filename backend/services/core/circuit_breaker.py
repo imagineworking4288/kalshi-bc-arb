@@ -6,11 +6,25 @@ Automatically stops trading when loss limits are hit.
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import List, Tuple
+from typing import List, Tuple, Optional
+from enum import Enum
 
 from ..log_config import get_logger
 
 logger = get_logger("circuit_breaker")
+
+
+class TripReason(str, Enum):
+    """Reasons for circuit breaker trip."""
+    DAILY_LOSS = "daily_loss"
+    POSITION_LIMIT = "position_limit"
+    CONSECUTIVE_LOSSES = "consecutive_losses"
+    WIN_RATE = "win_rate"
+    DRAWDOWN = "drawdown"
+    API_ERRORS = "api_errors"
+    ORDER_REJECTIONS = "order_rejections"
+    MANUAL = "manual"
+    HOURLY_LOSSES = "hourly_losses"
 
 
 @dataclass
@@ -21,6 +35,43 @@ class CBConfig:
     max_hourly_losses: int = 3  # Max losses in an hour
     cooldown_seconds: int = 300  # 5 minute cooldown after trip
     auto_reset_hours: int = 24  # Auto-reset after 24 hours
+
+
+# Backwards compatibility alias
+CircuitBreakerConfig = CBConfig
+
+
+@dataclass
+class CircuitBreakerStatus:
+    """Current circuit breaker status (backwards compatibility)."""
+    can_trade: bool
+    tripped: bool
+    trip_reason: Optional[TripReason]
+    trip_time: Optional[datetime]
+    cooldown_until: Optional[datetime]
+    daily_pnl_cents: int = 0
+    total_position: int = 0
+    consecutive_losses: int = 0
+    win_rate: float = 0.0
+    drawdown_percent: float = 0.0
+    api_errors_hour: int = 0
+    warnings: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "can_trade": self.can_trade,
+            "tripped": self.tripped,
+            "trip_reason": self.trip_reason.value if self.trip_reason else None,
+            "trip_time": self.trip_time.isoformat() if self.trip_time else None,
+            "cooldown_until": self.cooldown_until.isoformat() if self.cooldown_until else None,
+            "daily_pnl_cents": self.daily_pnl_cents,
+            "total_position": self.total_position,
+            "consecutive_losses": self.consecutive_losses,
+            "win_rate": self.win_rate,
+            "drawdown_percent": self.drawdown_percent,
+            "api_errors_hour": self.api_errors_hour,
+            "warnings": self.warnings,
+        }
 
 
 @dataclass

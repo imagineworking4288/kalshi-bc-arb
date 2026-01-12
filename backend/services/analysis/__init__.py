@@ -8,12 +8,10 @@ This module provides comprehensive analysis capabilities for:
 - Multi-strategy arbitrage analysis
 """
 
-from .fee_calculator import (
+from ..core.fee_calculator import (
     FeeCalculator,
     FeeResult,
-    LegFee,
     calculate_fee,
-    calculate_multi_leg_fee,
 )
 
 from .probability_engine import (
@@ -59,12 +57,10 @@ from .arbitrage_calculator import (
 )
 
 __all__ = [
-    # Fee calculation
+    # Fee calculation (from core)
     'FeeCalculator',
     'FeeResult',
-    'LegFee',
     'calculate_fee',
-    'calculate_multi_leg_fee',
 
     # Probability (v1)
     'ProbabilityEngine',

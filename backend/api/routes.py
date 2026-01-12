@@ -24,7 +24,7 @@ from ..services.portfolio_service import PortfolioService
 from ..services.watchlist_service import WatchlistService
 from ..services.scanner_db import ScannerDatabase
 from ..services.log_config import LOG_DIR, MAIN_LOG
-from ..services.fee_calculator import FeeCalculator, OrderType
+from ..services.core.fee_calculator import FeeCalculator, OrderType
 from ..services.core import ExecutionGateway
 
 router = APIRouter()
@@ -526,57 +526,46 @@ async def remove_from_watchlist(ticker: str):
     return {"message": f"Removed {ticker} from watchlist"}
 
 
-# ============== AUTO-TRADER ==============
+# ============== AUTO-TRADER (DEPRECATED) ==============
+# Auto-trader has been replaced by StrategyOrchestrator.
+# These endpoints now redirect to orchestrator or return deprecation notices.
 
-# Auto-trader instance (initialized on startup)
-auto_trader_instance = None
+auto_trader_instance = None  # Keep for backwards compatibility, always None
 
 
 @router.get("/auto-trader/status")
 async def get_auto_trader_status():
-    """Get current auto-trader status and configuration."""
-    if not auto_trader_instance:
-        return {"enabled": 0, "mode": "NOT INITIALIZED", "is_running": False}
-    return await auto_trader_instance.get_status()
+    """DEPRECATED: Use /orchestrator/status instead."""
+    return {
+        "deprecated": True,
+        "message": "Auto-trader has been replaced by StrategyOrchestrator. Use /api/orchestrator/status instead.",
+        "enabled": False,
+        "is_running": False
+    }
 
 
 @router.post("/auto-trader/config")
 async def update_auto_trader_config(request: dict):
-    """Update auto-trader configuration."""
-    if not auto_trader_instance:
-        raise HTTPException(500, "Auto-trader not initialized")
-
-    return await auto_trader_instance.update_config(**request)
+    """DEPRECATED: Use /orchestrator/config instead."""
+    raise HTTPException(410, "Auto-trader has been removed. Use /api/orchestrator/config instead.")
 
 
 @router.post("/auto-trader/start")
 async def start_auto_trader():
-    """Start the auto-trader."""
-    if not auto_trader_instance:
-        raise HTTPException(500, "Auto-trader not initialized")
-
-    await auto_trader_instance.start()
-    return {"success": True, "status": await auto_trader_instance.get_status()}
+    """DEPRECATED: Use /orchestrator/start instead."""
+    raise HTTPException(410, "Auto-trader has been removed. Use /api/orchestrator/start instead.")
 
 
 @router.post("/auto-trader/stop")
 async def stop_auto_trader():
-    """Stop the auto-trader."""
-    if not auto_trader_instance:
-        raise HTTPException(500, "Auto-trader not initialized")
-
-    await auto_trader_instance.stop()
-    return {"success": True, "status": await auto_trader_instance.get_status()}
+    """DEPRECATED: Use /orchestrator/stop instead."""
+    raise HTTPException(410, "Auto-trader has been removed. Use /api/orchestrator/stop instead.")
 
 
 @router.get("/auto-trader/scan")
 async def manual_scan():
-    """Manually trigger edge scan without executing trades."""
-    if not auto_trader_instance:
-        raise HTTPException(500, "Auto-trader not initialized")
-
-    signals = await auto_trader_instance.manual_scan()
-    return {"signals": signals, "count": len(signals)}
+    """DEPRECATED: Use /orchestrator/scan instead."""
+    raise HTTPException(410, "Auto-trader has been removed. Use /api/orchestrator/scan instead.")
 
 
 @router.get("/auto-trader/signals")
@@ -600,69 +589,58 @@ async def get_signals(status: Optional[str] = None, limit: int = 50):
 
 
 # ===========================================
-# BTC ARBITRAGE ENGINE (Singleton)
+# BTC ARBITRAGE ENGINE (DEPRECATED)
 # ===========================================
-btc_arb_engine_instance: Optional['BTCArbitrageEngine'] = None
+# BTCArbitrageEngine has been replaced by BTCArbitrageStrategy in the orchestrator.
+btc_arb_engine_instance = None  # Keep for backwards compatibility, always None
 
 
 def get_btc_arb_engine():
-    """Get the BTC arb engine instance."""
-    global btc_arb_engine_instance
-    if btc_arb_engine_instance is None:
-        raise RuntimeError(
-            "BTCArbitrageEngine not initialized. "
-            "Ensure main.py lifespan calls set_btc_arb_engine() before any requests."
-        )
-    return btc_arb_engine_instance
+    """DEPRECATED: BTCArbitrageEngine has been removed."""
+    raise HTTPException(410, "BTCArbitrageEngine has been removed. Use /api/orchestrator endpoints instead.")
 
 
-def set_btc_arb_engine(engine: 'BTCArbitrageEngine'):
-    """Set the BTC arb engine instance (called from main.py lifespan)."""
-    global btc_arb_engine_instance
-    btc_arb_engine_instance = engine
-    logger.info("BTCArbitrageEngine registered with routes")
+def set_btc_arb_engine(engine):
+    """DEPRECATED: No-op for backwards compatibility."""
+    logger.warning("set_btc_arb_engine called but BTCArbitrageEngine has been removed")
 
 
 # ===========================================
-# BTC ARBITRAGE ENDPOINTS
+# BTC ARBITRAGE ENDPOINTS (DEPRECATED)
 # ===========================================
 
 @router.get("/btc-arb/status")
 async def get_btc_arb_status():
-    """Get BTC arbitrage engine full status including market data and calculations."""
-    engine = get_btc_arb_engine()
-    return await engine.get_full_status()
+    """DEPRECATED: Use /orchestrator/status instead."""
+    return {
+        "deprecated": True,
+        "message": "BTCArbitrageEngine has been replaced by StrategyOrchestrator. Use /api/orchestrator/status instead.",
+        "running": False
+    }
 
 
 @router.put("/btc-arb/config")
 async def update_btc_arb_config(request: Request):
-    """Update BTC arbitrage engine configuration."""
-    data = await request.json()
-    engine = get_btc_arb_engine()
-    return await engine.update_config(**data)
+    """DEPRECATED: Use /orchestrator/config instead."""
+    raise HTTPException(410, "BTCArbitrageEngine has been removed. Use /api/orchestrator/config instead.")
 
 
 @router.post("/btc-arb/execute/{opportunity_id}")
 async def execute_btc_arb(opportunity_id: str):
-    """Manually execute a BTC arbitrage opportunity."""
-    engine = get_btc_arb_engine()
-    return await engine.manual_execute(opportunity_id)
+    """DEPRECATED: Use /orchestrator/execute instead."""
+    raise HTTPException(410, "BTCArbitrageEngine has been removed. Use /api/orchestrator/execute instead.")
 
 
 @router.post("/btc-arb/start")
 async def start_btc_arb_engine():
-    """Start the BTC arbitrage engine."""
-    engine = get_btc_arb_engine()
-    await engine.start()
-    return await engine.get_status()
+    """DEPRECATED: Use /orchestrator/start instead."""
+    raise HTTPException(410, "BTCArbitrageEngine has been removed. Use /api/orchestrator/start instead.")
 
 
 @router.post("/btc-arb/stop")
 async def stop_btc_arb_engine():
-    """Stop the BTC arbitrage engine."""
-    engine = get_btc_arb_engine()
-    await engine.stop()
-    return await engine.get_status()
+    """DEPRECATED: Use /orchestrator/stop instead."""
+    raise HTTPException(410, "BTCArbitrageEngine has been removed. Use /api/orchestrator/stop instead.")
 
 
 @router.get("/btc-arb/executions")
@@ -1294,20 +1272,9 @@ async def emergency_kill(request: Request):
     # Trip circuit breaker
     await orch.circuit.force_trip("Emergency kill switch activated")
 
-    # Stop orchestrator
+    # Stop orchestrator (the single trading engine)
     if orch._is_running:
         await orch.stop()
-
-    # Stop auto-trader
-    if hasattr(request.app.state, 'auto_trader') and request.app.state.auto_trader:
-        auto_trader = request.app.state.auto_trader
-        if auto_trader.is_running:
-            await auto_trader.stop()
-
-    # Stop BTC arb engine
-    btc_engine = get_btc_arb_engine()
-    if btc_engine and btc_engine.status.is_running:
-        await btc_engine.stop()
 
     # Send critical alert
     from ..services.core.alert_service import AlertType, AlertPriority
@@ -1375,27 +1342,13 @@ async def emergency_status(request: Request):
     Returns status of all trading components:
     - Circuit breaker state
     - Orchestrator running state
-    - Auto-trader running state
-    - BTC arb engine running state
     """
     orch = get_orchestrator()
-    btc_engine = get_btc_arb_engine()
-
-    # Get auto-trader status
-    auto_trader_running = False
-    if hasattr(request.app.state, 'auto_trader') and request.app.state.auto_trader:
-        auto_trader_running = request.app.state.auto_trader.is_running
 
     return {
         "circuit_breaker": orch.circuit.get_status() if orch else None,
         "orchestrator_running": orch._is_running if orch else False,
-        "auto_trader_running": auto_trader_running,
-        "btc_arb_running": btc_engine.status.is_running if btc_engine else False,
-        "all_systems_stopped": (
-            (not orch or not orch._is_running) and
-            not auto_trader_running and
-            (not btc_engine or not btc_engine.status.is_running)
-        )
+        "all_systems_stopped": not orch or not orch._is_running
     }
 
 

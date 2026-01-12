@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from .fee_calculator import calculate_fee, FeeResult
+from ..core.fee_calculator import calculate_fee, FeeResult
 
 
 @dataclass

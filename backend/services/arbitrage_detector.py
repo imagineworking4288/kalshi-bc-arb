@@ -4,7 +4,7 @@ from typing import List, Optional
 from dataclasses import dataclass, field
 
 from .market_classifier import ThresholdMarket, BracketMarket, MarketGroup
-from .fee_calculator import calculate_fee
+from .core.fee_calculator import calculate_fee
 
 
 @dataclass

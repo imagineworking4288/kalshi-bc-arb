@@ -17,20 +17,20 @@ if %ERRORLEVEL% EQU 0 (
     start "" wt -w 0 ^
         -d "%PROJECT_DIR%\frontend" --title "Frontend" cmd /k "npm run dev" ^; ^
         new-tab -d "%PROJECT_DIR%" --title "API" cmd /k "python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8001" ^; ^
-        new-tab -d "%PROJECT_DIR%" --title "Scanners" cmd /k "python run_scanners.py" ^; ^
         new-tab -d "%PROJECT_DIR%" --title "Logs" cmd /k "python run_logs.py"
 ) else (
     start "Frontend" cmd /k "cd /d %PROJECT_DIR%\frontend && npm run dev"
     timeout /t 2 /nobreak >nul
     start "API" cmd /k "cd /d %PROJECT_DIR% && python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8001"
     timeout /t 3 /nobreak >nul
-    start "Scanners" cmd /k "cd /d %PROJECT_DIR% && python run_scanners.py"
     start "Logs" cmd /k "cd /d %PROJECT_DIR% && python run_logs.py"
 )
 
 echo.
 echo   Frontend:  http://localhost:5173
 echo   Backend:   http://localhost:8001
+echo   Note: Scanners now run inside the API process.
+echo         Set AUTO_START_SCANNING=true in .env to enable.
 echo.
 timeout /t 5 /nobreak >nul
 start http://localhost:5173

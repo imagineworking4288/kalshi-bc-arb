@@ -10,7 +10,7 @@ Now includes Kalshi fee calculations!
 """
 
 from typing import List, Dict, Any
-from .fee_calculator import FeeCalculator, OrderType
+from .core.fee_calculator import FeeCalculator, OrderType
 from .log_config import get_logger
 
 logger = get_logger("arbitrage_calculator")

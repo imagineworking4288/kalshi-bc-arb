@@ -22,47 +22,27 @@ const CITY_NAMES: Record<string, string> = {
   PHL: 'Philadelphia'
 };
 
-// Extract temperature label directly from Kalshi's title field
-// This guarantees exact matching with Kalshi website display
+// Generate bracket label from Kalshi's floor_strike and cap_strike
+// DO NOT parse from title - use the actual API values!
 function getBracketLabel(bracket: BracketMarket): string {
-  const title = bracket.title || '';
+  const floor = bracket.floor_strike;
+  const cap = bracket.cap_strike;
 
-  // Extract pattern after "be " and before "°"
-  // Examples: "be 61-62°" → "61-62", "be >62°" → ">62", "be <55°" → "<55"
-  const match = title.match(/be\s+([<>]=?)?\s*(\d+)(?:-(\d+))?°/);
-
-  if (match) {
-    const [, operator, num1, num2] = match;
-
-    if (num2) {
-      // Range like "61-62°" → "61-62°F"
-      return `${num1}-${num2}°F`;
-    } else if (operator === '>') {
-      // Greater than like ">62°" means "63 or above" → "≥63°F"
-      return `≥${parseInt(num1) + 1}°F`;
-    } else if (operator === '>=') {
-      // Greater than or equal like ">=62°" → "≥62°F"
-      return `≥${num1}°F`;
-    } else if (operator === '<') {
-      // Less than like "<55°" means "54 or below" → "≤54°F"
-      return `≤${parseInt(num1) - 1}°F`;
-    } else if (operator === '<=') {
-      // Less than or equal like "<=55°" → "≤55°F"
-      return `≤${num1}°F`;
-    } else {
-      // Single value
-      return `${num1}°F`;
+  // Lower edge bracket: "X° or below"
+  if (floor === null || floor === undefined) {
+    if (cap !== null && cap !== undefined) {
+      return `${cap}° or below`;
     }
+    return bracket.title?.slice(0, 20) || '?';
   }
 
-  // Fallback: try to extract any temperature pattern
-  const fallbackMatch = title.match(/(\d+)(?:-(\d+))?°/);
-  if (fallbackMatch) {
-    const [, n1, n2] = fallbackMatch;
-    return n2 ? `${n1}-${n2}°F` : `${n1}°F`;
+  // Upper edge bracket: "X° or above"
+  if (cap === null || cap === undefined) {
+    return `${floor}° or above`;
   }
 
-  return bracket.title?.slice(0, 20) || '?';
+  // Range bracket: "X-Y°F"
+  return `${floor}-${cap}°F`;
 }
 
 // Sort brackets by temperature ascending (open-ended lower first, then ranges, then open-ended upper)
