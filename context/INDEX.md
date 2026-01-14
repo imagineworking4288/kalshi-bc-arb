@@ -59,7 +59,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | File | Command | When to use |
 |------|---------|-------------|
 | backend/main.py | `uvicorn backend.main:app --reload` | Start FastAPI backend server |
-| run_logs.py | `python run_logs.py` | Run colored log viewer with filtering |
+| run_logs.py | `python run_logs.py` | View real-time colored logs with filtering |
 | test_core_components.py | `python test_core_components.py` | Test core trading infrastructure |
 | test_integration_startup.py | `python test_integration_startup.py` | Test complete application startup sequence |
 
@@ -81,8 +81,6 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/config/locations/registry.py | Weather location definitions (7 cities) |
 | start.bat | Windows batch 4-terminal launcher script |
 | stop.bat | Stop all Kalshi platform services |
-| run_scanners.py | Scanner service entry point |
-| run_logs.py | Log viewer entry point |
 | test_core_components.py | Core trading infrastructure component test suite |
 | backend/api/__init__.py | API module exports |
 | backend/api/prediction_routes.py | Weather prediction and forecast API endpoints |
@@ -205,7 +203,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/src/types/index.ts | TypeScript interfaces |
 | frontend/src/types/weather.ts | Weather arbitrage type definitions |
 | frontend/src/utils/format.ts | Currency and time formatters |
-| run_logs.py | Log viewer entry point |
+| run_logs.py | Standalone log viewer with filtering and color coding |
 | test_core_components.py | Core trading infrastructure component test suite |
 | diagnose_infrastructure.py | Comprehensive diagnostic tool for database schema, component imports, and system validation |
 | test1.py | Quick validation test suite for new trading infrastructure components |

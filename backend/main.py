@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import asyncio
 import logging
 
 from .api.routes import router
@@ -31,6 +32,10 @@ from .services.spot_price_client import SpotPriceClient
 # from .services.auto_trader import AutoTrader
 # from .services.btc_arb_engine import BTCArbitrageEngine
 from .services.reconciliation import ReconciliationService, ReconciliationConfig
+
+# Scanners (for UI data - separate from strategies)
+from .services.weather_arb_scanner import WeatherArbScanner
+from .services.scanner_db import ScannerDatabase
 
 # Strategies
 from .services.strategies import (
@@ -160,6 +165,32 @@ async def lifespan(app: FastAPI):
         logger.info("Orchestrator ready (scanning not auto-started)")
 
     # ═══════════════════════════════════════════════════════════════
+    # BACKGROUND SCANNERS (for UI data)
+    # ═══════════════════════════════════════════════════════════════
+    # These scanners populate scanner_db with detailed market data
+    # for the frontend UI (separate from strategy signals)
+    scanner_db = ScannerDatabase()
+    weather_scanner = WeatherArbScanner(kalshi_client)
+    scanner_task = None
+
+    async def run_scanners_background():
+        """Background task to run scanners and populate scanner_db."""
+        while True:
+            try:
+                # Run weather scanner
+                weather_result = await weather_scanner.scan_once()
+                scanner_db.save_scanner_result("weather", weather_result)
+                logger.debug(f"Weather scan completed: {weather_result.get('scan_count', 0)} scans")
+            except Exception as e:
+                logger.error(f"Scanner error: {e}")
+            await asyncio.sleep(settings.weather_scan_interval)
+
+    if settings.auto_start_scanning:
+        scanner_task = asyncio.create_task(run_scanners_background())
+        logger.info("Background scanners started (weather)")
+        app.state.scanner_task = scanner_task
+
+    # ═══════════════════════════════════════════════════════════════
     # RECONCILIATION
     # ═══════════════════════════════════════════════════════════════
 
@@ -226,6 +257,18 @@ async def lifespan(app: FastAPI):
             print("[SHUTDOWN] Strategy Orchestrator stopped")
     except Exception as e:
         print(f"[SHUTDOWN] Error stopping Strategy Orchestrator: {e}")
+
+    # Stop background scanner task
+    try:
+        if scanner_task and not scanner_task.done():
+            scanner_task.cancel()
+            try:
+                await scanner_task
+            except asyncio.CancelledError:
+                pass
+            print("[SHUTDOWN] Background scanners stopped")
+    except Exception as e:
+        print(f"[SHUTDOWN] Error stopping scanners: {e}")
 
     # Stop ReconciliationService
     try:

@@ -16,14 +16,11 @@ where wt >nul 2>nul
 if %ERRORLEVEL% EQU 0 (
     start "" wt -w 0 ^
         -d "%PROJECT_DIR%\frontend" --title "Frontend" cmd /k "npm run dev" ^; ^
-        new-tab -d "%PROJECT_DIR%" --title "API" cmd /k "python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8001" ^; ^
-        new-tab -d "%PROJECT_DIR%" --title "Logs" cmd /k "python run_logs.py"
+        new-tab -d "%PROJECT_DIR%" --title "API" cmd /k "python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8001"
 ) else (
     start "Frontend" cmd /k "cd /d %PROJECT_DIR%\frontend && npm run dev"
     timeout /t 2 /nobreak >nul
     start "API" cmd /k "cd /d %PROJECT_DIR% && python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8001"
-    timeout /t 3 /nobreak >nul
-    start "Logs" cmd /k "cd /d %PROJECT_DIR% && python run_logs.py"
 )
 
 echo.

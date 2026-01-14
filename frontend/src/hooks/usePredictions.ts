@@ -17,9 +17,9 @@ export interface ForecastData {
   city: string;
   forecast_high: number;
   forecast_low: number;
-  weather_pattern: 'stable' | 'transitional' | 'stormy' | 'frontal';
+  weather_pattern: string;
   short_forecast: string;
-  source: 'nws' | 'open_meteo';
+  source: string;
   fetched_at: string;
   cached: boolean;
   cache_age_seconds: number;
@@ -35,12 +35,13 @@ export interface BracketPrediction {
   no_price_cents: number | null;
   yes_ev_after_fee: number;
   no_ev_after_fee: number;
-  recommended_action: 'buy_yes' | 'buy_no' | 'hold' | 'skip';
-  recommended_side: 'yes' | 'no' | null;
+  recommended_action: string;
+  recommended_side: string | null;
   recommended_contracts: number;
   kelly_fraction: number;
   has_existing_position: boolean;
   position_conflict: boolean;
+  existing_side?: 'yes' | 'no' | null;
   confidence: number;
 }
 
@@ -93,7 +94,7 @@ export function usePredictions(city: string): UsePredictionsResult {
   const [isLoading, setIsLoading] = useState(true);
   const [dataSource, setDataSource] = useState<string | null>(null);
   const [cacheAge, setCacheAge] = useState(0);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchPredictions = useCallback(async (forceRefresh = false) => {
     if (!city) {

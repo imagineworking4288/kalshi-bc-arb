@@ -323,8 +323,8 @@ export function CryptoArbitrageSection() {
           {cryptoAssets.map((asset) => {
             const isLive = asset.enabled && status;
             const stats = asset.enabled && status ? status.stats : null;
-            const rangeCount = asset.enabled && status ? status.market_data.range_markets.length : 0;
-            const thresholdCount = asset.enabled && status ? status.market_data.threshold_markets.length : 0;
+            const rangeCount = asset.enabled && status ? (status.market_data?.range_markets?.length ?? 0) : 0;
+            const thresholdCount = asset.enabled && status ? (status.market_data?.threshold_markets?.length ?? 0) : 0;
 
             return (
               <div

@@ -224,20 +224,22 @@ TypedDict definitions and enums for inter-component communication
 ## backend/services/
 
 ### kalshi_client.py
-HTTP client for Kalshi REST API with retry logic and batch orders
+HTTP client for Kalshi REST API with rate limiting, idempotency support, and enhanced error handling
 
 | Class/Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
-| KalshiClient | - | - | Initialize with settings, create auth if credentials exist |
-| KalshiClient._request | method, endpoint, params, json, max_retries | dict | Make authenticated HTTP request with exponential backoff retry |
+| RateLimiter | max_requests: int = 10, window_seconds: float = 1.0 | - | Token bucket rate limiter for API requests |
+| RateLimiter.acquire | - | None | Wait until request slot available (async) |
+| KalshiClient | - | - | Initialize with settings, auth, read/write rate limiters |
+| KalshiClient._request | method, endpoint, params, json, max_retries | dict | Rate-limited authenticated HTTP request with exponential backoff retry |
 | KalshiClient.get_markets | limit: int | List[Dict] | Fetch markets from Kalshi (status filter removed) |
 | KalshiClient.get_market | ticker: str | Dict | Get single market by ticker |
 | KalshiClient.get_orderbook | ticker: str, depth: int | Dict | Get orderbook for market |
 | KalshiClient.get_events | series_ticker, status, with_nested_markets, limit | List[Dict] | Fetch events with mutually_exclusive flag for arbitrage |
 | KalshiClient.get_balance | - | Dict | Get account balance |
 | KalshiClient.get_positions | status: str | List[Dict] | Get portfolio positions |
-| KalshiClient.place_order | ticker, side, action, count, price, order_type | Dict | Place single limit order on Kalshi |
-| KalshiClient.place_batch_orders | orders: List[Dict] | Dict | Execute multiple orders atomically via batch endpoint |
+| KalshiClient.place_order | ticker, side, action, count, price, order_type, client_order_id? | Dict | Place single limit order with idempotency key and detailed error logging |
+| KalshiClient.place_batch_orders | orders: List[Dict] | Dict | Execute multiple orders atomically with auto-generated idempotency keys |
 | KalshiClient.get_fills | limit: int = 100 | List[Dict] | Get fill history from Kalshi API with trade details |
 | KalshiClient.get_orders | status?: str, limit: int = 100 | List[Dict] | Get order history from Kalshi API with optional status filter |
 
@@ -666,7 +668,7 @@ Historical strategy backtesting engine
 | BacktestEngine.run_multiple | strategies: List[BaseStrategy], config | Dict[str, BacktestResult] | Run backtest for multiple strategies |
 
 ### execution_gateway.py
-Single entry point for all trade execution with risk checks
+Single entry point for all trade execution with risk checks, price validation, and position conflict detection
 
 | Class | Fields | Description |
 |-------|--------|-------------|
@@ -674,12 +676,15 @@ Single entry point for all trade execution with risk checks
 
 | Class/Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
-| ExecutionGateway | kalshi_client, paper_service, risk_manager, circuit_breaker, fee_calculator, db, alert_service, config? | - | Initialize unified execution gateway |
-| ExecutionGateway.execute_single | ticker, side, action, contracts, price_cents, mode="paper", source="manual" | BatchResult | Execute single order with full pipeline |
-| ExecutionGateway.execute_arbitrage | legs: List[dict], contracts_per_leg: int, mode="paper", source="strategy" | BatchResult | Execute arbitrage trade with validation |
-| ExecutionGateway.execute_batch | legs: List[OrderLeg], mode="paper", source="strategy", atomic=True | BatchResult | Execute batch of orders with risk checks |
-| ExecutionGateway.estimate_cost | legs: List[dict] | dict | Estimate costs and fees before execution |
-| ExecutionGateway.get_stats | - | dict | Get gateway execution statistics |
+| ExecutionGateway | kalshi_client, paper_service, risk_manager, circuit_breaker, fee_calculator, db, alert_service, config?, position_manager? | - | Initialize unified execution gateway with position cache invalidation |
+| ExecutionGateway.execute | request: ExecutionRequest | ExecutionResult | Execute trade with full pipeline: idempotency, validation, price re-validation, risk checks, position conflicts |
+| ExecutionGateway.execute_single | ticker, side, action, contracts, price_cents, mode="paper", source="manual" | ExecutionResult | Execute single order with full pipeline |
+| ExecutionGateway.execute_arbitrage | legs: List[dict], contracts_per_leg: int, mode="paper", source="strategy" | ExecutionResult | Execute arbitrage trade with validation |
+| ExecutionGateway._check_position_conflicts | request: ExecutionRequest | None | Validate no YES+NO conflicts on same market |
+| ExecutionGateway._revalidate_prices | request: ExecutionRequest, max_slippage_cents=2 | bool | Check prices haven't moved beyond slippage |
+| ExecutionGateway.get_status | - | dict | Get gateway configuration and cache status |
+| ExecutionGateway.get_recent_audits | limit=50 | List[Dict] | Get execution audit history |
+| ExecutionGateway.clear_cache | - | int | Clear idempotency cache, return cleared count |
 
 ### fee_calculator.py
 Consolidated fee calculation service

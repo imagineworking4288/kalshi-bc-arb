@@ -25,7 +25,7 @@ from ..services.watchlist_service import WatchlistService
 from ..services.scanner_db import ScannerDatabase
 from ..services.log_config import LOG_DIR, MAIN_LOG
 from ..services.core.fee_calculator import FeeCalculator, OrderType
-from ..services.core import ExecutionGateway
+from ..services.core import ExecutionGateway, StrategyType
 
 router = APIRouter()
 
@@ -535,37 +535,92 @@ auto_trader_instance = None  # Keep for backwards compatibility, always None
 
 @router.get("/auto-trader/status")
 async def get_auto_trader_status():
-    """DEPRECATED: Use /orchestrator/status instead."""
+    """
+    Get auto-trader status via orchestrator.
+
+    Returns orchestrator status in a format compatible with legacy auto-trader frontend.
+    """
+    orch = get_orchestrator()
+    if not orch:
+        return {
+            "enabled": False,
+            "is_running": False,
+            "mode": "paper",
+            "strategies": [],
+            "error": "Orchestrator not initialized"
+        }
+
     return {
-        "deprecated": True,
-        "message": "Auto-trader has been replaced by StrategyOrchestrator. Use /api/orchestrator/status instead.",
-        "enabled": False,
-        "is_running": False
+        "enabled": orch._auto_trade_enabled,
+        "is_running": orch._is_running,
+        "mode": orch._mode,
+        "strategies": [st.value for st in orch._strategies.keys()],
+        "signals_processed": orch._signals_processed,
+        "trades_executed": orch._trades_executed
     }
 
 
 @router.post("/auto-trader/config")
-async def update_auto_trader_config(request: dict):
-    """DEPRECATED: Use /orchestrator/config instead."""
-    raise HTTPException(410, "Auto-trader has been removed. Use /api/orchestrator/config instead.")
+async def update_auto_trader_config(request: Request):
+    """
+    Update auto-trader config via orchestrator.
+    """
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+
+    data = await request.json()
+
+    if 'enabled' in data or 'auto_trade_enabled' in data:
+        enabled = data.get('enabled', data.get('auto_trade_enabled', False))
+        orch.set_auto_trade(enabled)
+    if 'mode' in data:
+        orch.set_mode(data['mode'])
+
+    return {"success": True, "message": "Config updated via orchestrator"}
 
 
 @router.post("/auto-trader/start")
 async def start_auto_trader():
-    """DEPRECATED: Use /orchestrator/start instead."""
-    raise HTTPException(410, "Auto-trader has been removed. Use /api/orchestrator/start instead.")
+    """
+    Start auto-trader via orchestrator.
+    """
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+
+    await orch.start()
+    return {"success": True, "message": "Orchestrator started", "is_running": orch._is_running}
 
 
 @router.post("/auto-trader/stop")
 async def stop_auto_trader():
-    """DEPRECATED: Use /orchestrator/stop instead."""
-    raise HTTPException(410, "Auto-trader has been removed. Use /api/orchestrator/stop instead.")
+    """
+    Stop auto-trader via orchestrator.
+    """
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+
+    await orch.stop()
+    return {"success": True, "message": "Orchestrator stopped", "is_running": orch._is_running}
 
 
 @router.get("/auto-trader/scan")
 async def manual_scan():
-    """DEPRECATED: Use /orchestrator/scan instead."""
-    raise HTTPException(410, "Auto-trader has been removed. Use /api/orchestrator/scan instead.")
+    """
+    Trigger manual scan via orchestrator.
+    """
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+
+    signals = await orch.manual_scan()
+    return {
+        "success": True,
+        "signals": signals,
+        "count": len(signals)
+    }
 
 
 @router.get("/auto-trader/signals")
@@ -611,24 +666,115 @@ def set_btc_arb_engine(engine):
 
 @router.get("/btc-arb/status")
 async def get_btc_arb_status():
-    """DEPRECATED: Use /orchestrator/status instead."""
+    """
+    Get BTC arbitrage status.
+
+    Returns data in the format expected by CryptoArbitrageSection.tsx.
+    If orchestrator is available and has BTC strategy, returns real data.
+    Otherwise returns a default structure so the frontend doesn't crash.
+    """
+    orch = get_orchestrator()
+
+    # Try to get data from orchestrator's BTC strategy
+    btc_status = {}
+    if orch:
+        btc_strategy = orch._strategies.get(StrategyType.BTC)
+        if btc_strategy and hasattr(btc_strategy, 'get_status'):
+            btc_status = btc_strategy.get_status()
+
+    # Return structure expected by frontend (with safe defaults)
+    # Map from strategy field names to frontend expected names
     return {
-        "deprecated": True,
-        "message": "BTCArbitrageEngine has been replaced by StrategyOrchestrator. Use /api/orchestrator/status instead.",
-        "running": False
+        "is_running": orch._is_running if orch else False,
+        "last_scan_at": btc_status.get("last_scan_at"),
+        "last_scan_duration_ms": btc_status.get("last_scan_duration_ms", 0),
+        "total_scans": btc_status.get("scan_count", 0),  # Map from scan_count
+        "opportunities_found": btc_status.get("signals_generated", 0),  # Map from signals_generated
+        "auto_executions": btc_status.get("auto_executions", 0),
+        "last_error": btc_status.get("last_error"),
+        "config": {
+            "min_edge_percent": btc_status.get("config", {}).get("min_edge_percent", 3.0),
+            "budget_cents": btc_status.get("config", {}).get("budget_cents", 10000),
+            "auto_trade_enabled": orch._auto_trade_enabled if orch else False,
+            "mode": orch._mode if orch else "paper",
+            "scan_interval_seconds": btc_status.get("config", {}).get("scan_interval_seconds", 2)
+        },
+        "opportunities": btc_status.get("opportunities", []),
+        "market_data": {
+            "range_markets": btc_status.get("market_data", {}).get("range_markets", []),
+            "threshold_markets": btc_status.get("market_data", {}).get("threshold_markets", []),
+            "event_dates": btc_status.get("market_data", {}).get("event_dates", [])
+        },
+        "calculations": btc_status.get("calculations", []),
+        "all_calculations": btc_status.get("all_calculations", []),
+        "near_misses": btc_status.get("near_misses", []),
+        "profitable": btc_status.get("profitable", []),
+        "stats": {
+            "ranges_checked": btc_status.get("stats", {}).get("ranges_checked", 0),
+            "thresholds_found": btc_status.get("stats", {}).get("thresholds_found", 0),
+            "best_cost": btc_status.get("stats", {}).get("best_cost"),
+            "worst_cost": btc_status.get("stats", {}).get("worst_cost"),
+            "near_misses": btc_status.get("stats", {}).get("near_misses", 0),
+            "missing_prices": btc_status.get("stats", {}).get("missing_prices", 0),
+            "missing_thresholds": btc_status.get("stats", {}).get("missing_thresholds", 0),
+            "event_dates": btc_status.get("stats", {}).get("event_dates", [])
+        },
+        "activity_log": btc_status.get("activity_log", [])
     }
 
 
 @router.put("/btc-arb/config")
 async def update_btc_arb_config(request: Request):
-    """DEPRECATED: Use /orchestrator/config instead."""
-    raise HTTPException(410, "BTCArbitrageEngine has been removed. Use /api/orchestrator/config instead.")
+    """
+    Update BTC arbitrage configuration.
+
+    Forwards to the orchestrator's BTC strategy.
+    """
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+
+    data = await request.json()
+    btc_strategy = orch._strategies.get(StrategyType.BTC)
+
+    if btc_strategy:
+        # Update strategy config
+        if 'min_edge_percent' in data:
+            btc_strategy.min_edge_percent = data['min_edge_percent']
+        if 'scan_interval_seconds' in data:
+            btc_strategy._scan_interval = data['scan_interval_seconds']
+
+        # Update orchestrator settings
+        if 'auto_trade_enabled' in data:
+            orch.set_auto_trade(data['auto_trade_enabled'])
+        if 'mode' in data:
+            orch.set_mode(data['mode'])
+
+    return {"success": True, "message": "Config updated"}
 
 
 @router.post("/btc-arb/execute/{opportunity_id}")
-async def execute_btc_arb(opportunity_id: str):
-    """DEPRECATED: Use /orchestrator/execute instead."""
-    raise HTTPException(410, "BTCArbitrageEngine has been removed. Use /api/orchestrator/execute instead.")
+async def execute_btc_arb(opportunity_id: str, req: Request):
+    """
+    Execute a BTC arbitrage opportunity.
+
+    Forwards to the orchestrator for execution.
+    """
+    orch = get_orchestrator()
+    if not orch:
+        raise HTTPException(500, "Orchestrator not initialized")
+
+    try:
+        # Try to execute via orchestrator
+        result = await orch.manual_execute(opportunity_id)
+        return result
+    except Exception as e:
+        logger.error(f"BTC arb execution failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "opportunity_id": opportunity_id
+        }
 
 
 @router.post("/btc-arb/start")

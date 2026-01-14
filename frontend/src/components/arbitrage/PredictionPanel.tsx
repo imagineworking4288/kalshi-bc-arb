@@ -337,7 +337,7 @@ const PredictionPanelInner: React.FC<PredictionPanelInnerProps> = ({ city }) => 
     error,
     isLoading,
     isStale,
-    dataSource,
+    dataSource: _dataSource,  // Unused but available if needed
     cacheAge,
     forceRefresh,
   } = usePredictions(city);

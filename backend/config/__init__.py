@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     # Scanner settings
     btc_scan_interval: float = 2.0
     weather_scan_interval: float = 30.0
-    auto_start_scanning: bool = False  # Auto-start orchestrator on startup
+    auto_start_scanning: bool = True  # Auto-start orchestrator on startup
 
     # Database
     database_path: str = "./data/kalshi.db"

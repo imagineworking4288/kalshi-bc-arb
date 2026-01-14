@@ -7,7 +7,7 @@ Handles BOTH high and low temperature markets (14 total series).
 
 import asyncio
 import sys
-from datetime import datetime
+from datetime import datetime, date
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -194,8 +194,33 @@ class WeatherArbScanner:
                 result["error"] = "No open events"
                 return result
 
-            # Process each event (usually just today's)
-            for event in events[:1]:  # Focus on nearest event
+            # Select TODAY's event using hybrid approach:
+            # 1. Try to match today's date string in event_ticker
+            # 2. Fall back to sorting by close_time (pick soonest)
+            today_event = None
+            today_str = date.today().strftime("%y%b%d").upper()  # e.g., "26JAN13"
+
+            # Try date string matching first
+            for evt in events:
+                event_ticker = evt.get("event_ticker", "")
+                if today_str in event_ticker:
+                    today_event = evt
+                    break
+
+            # Fallback: sort by close_time and pick soonest
+            if today_event is None:
+                events_sorted = sorted(
+                    events,
+                    key=lambda e: e.get("close_time") or e.get("expiration_time") or "",
+                    reverse=False  # Ascending = soonest first
+                )
+                today_event = events_sorted[0] if events_sorted else events[-1]
+                logger.warning(
+                    f"No event for today ({today_str}), using soonest: {today_event.get('event_ticker')}"
+                )
+
+            # Process selected event
+            for event in [today_event]:
                 event_ticker = event.get("event_ticker", "")
 
                 # Get markets for this event - use series_ticker instead

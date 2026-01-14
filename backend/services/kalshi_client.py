@@ -1,6 +1,8 @@
 import httpx
 import asyncio
 import random
+import time
+import uuid
 from typing import Optional, List, Dict, Any
 from ..config import get_settings
 from ..utils.kalshi_auth import KalshiAuth
@@ -9,8 +11,40 @@ from .log_config import get_logger
 logger = get_logger("kalshi_client")
 
 
+class RateLimiter:
+    """
+    Simple token bucket rate limiter for API requests.
+
+    Limits requests to max_requests per window_seconds.
+    """
+
+    def __init__(self, max_requests: int = 10, window_seconds: float = 1.0):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests: List[float] = []
+        self._lock = asyncio.Lock()
+
+    async def acquire(self) -> None:
+        """Wait until a request slot is available."""
+        async with self._lock:
+            now = time.time()
+            # Remove old requests outside the window
+            self.requests = [t for t in self.requests if now - t < self.window_seconds]
+
+            if len(self.requests) >= self.max_requests:
+                # Wait until oldest request expires
+                wait_time = self.window_seconds - (now - self.requests[0])
+                if wait_time > 0:
+                    await asyncio.sleep(wait_time)
+                    # Clean up again after waiting
+                    now = time.time()
+                    self.requests = [t for t in self.requests if now - t < self.window_seconds]
+
+            self.requests.append(time.time())
+
+
 class KalshiClient:
-    """Client for Kalshi REST API"""
+    """Client for Kalshi REST API with rate limiting and idempotency support."""
 
     def __init__(self):
         self.settings = get_settings()
@@ -22,6 +56,10 @@ class KalshiClient:
                 self.settings.kalshi_api_key_id,
                 self.settings.kalshi_private_key_path
             )
+
+        # Rate limiters (Kalshi Free tier: 10 req/sec)
+        self._read_limiter = RateLimiter(max_requests=10, window_seconds=1.0)
+        self._write_limiter = RateLimiter(max_requests=5, window_seconds=1.0)
 
     async def _request(
         self,
@@ -48,6 +86,12 @@ class KalshiClient:
             httpx.HTTPStatusError: On 4xx errors (except 429)
             Exception: After max retries exhausted
         """
+        # Apply rate limiting
+        if method.upper() in ("POST", "PUT", "DELETE"):
+            await self._write_limiter.acquire()
+        else:
+            await self._read_limiter.acquire()
+
         url = f"{self.base_url}{endpoint}"
         path = f"/trade-api/v2{endpoint}"
 
@@ -156,10 +200,11 @@ class KalshiClient:
         action: str,
         count: int,
         price: int,
-        order_type: str = "limit"
+        order_type: str = "limit",
+        client_order_id: Optional[str] = None
     ) -> Dict:
         """
-        Place a single order.
+        Place a single order with idempotency support.
 
         Args:
             ticker: Market ticker
@@ -168,6 +213,7 @@ class KalshiClient:
             count: Number of contracts
             price: Price in cents (1-99)
             order_type: "limit" or "market"
+            client_order_id: Optional idempotency key (auto-generated if None)
 
         Returns:
             Order response from API
@@ -177,10 +223,19 @@ class KalshiClient:
             "side": side,
             "action": action,
             "count": count,
-            "type": order_type
+            "type": order_type,
+            "client_order_id": client_order_id or str(uuid.uuid4())
         }
         payload["yes_price" if side == "yes" else "no_price"] = price
-        return await self._request("POST", "/portfolio/orders", json=payload)
+
+        try:
+            return await self._request("POST", "/portfolio/orders", json=payload)
+        except httpx.HTTPStatusError as e:
+            # Log detailed error for debugging
+            logger.error(
+                f"Order failed: {e.response.status_code} - {e.response.text}"
+            )
+            raise
 
     async def place_batch_orders(self, orders: List[Dict]) -> Dict:
         """
@@ -193,16 +248,28 @@ class KalshiClient:
                 - action: str ("buy" or "sell")
                 - count: int (number of contracts)
                 - yes_price: int (price in cents, 1-99)
+                - client_order_id: (optional) idempotency key
 
         Returns:
             API response with "orders" list containing results for each order.
             Each result has "order" (if successful) or "error" (if failed).
         """
-        return await self._request(
-            "POST",
-            "/portfolio/orders/batched",
-            json={"orders": orders}
-        )
+        # Add idempotency keys to orders that don't have them
+        for order in orders:
+            if "client_order_id" not in order:
+                order["client_order_id"] = str(uuid.uuid4())
+
+        try:
+            return await self._request(
+                "POST",
+                "/portfolio/orders/batched",
+                json={"orders": orders}
+            )
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"Batch order failed: {e.response.status_code} - {e.response.text}"
+            )
+            raise
 
     async def get_fills(self, limit: int = 100) -> List[Dict]:
         """

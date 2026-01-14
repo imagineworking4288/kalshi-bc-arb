@@ -122,6 +122,7 @@ class ExecutionGateway:
         db,  # Database
         alert_service: AlertService,
         config: Optional[GatewayConfig] = None,
+        position_manager=None,  # PositionManager for cache invalidation
     ):
         """
         Initialize ExecutionGateway with all dependencies.
@@ -135,6 +136,7 @@ class ExecutionGateway:
             db: Database connection for audit logging
             alert_service: AlertService for notifications
             config: Optional configuration overrides
+            position_manager: Optional PositionManager for cache invalidation
         """
         self.kalshi_client = kalshi_client
         self.paper_service = paper_service
@@ -144,6 +146,7 @@ class ExecutionGateway:
         self.db = db
         self.alert_service = alert_service
         self.config = config or GatewayConfig()
+        self.position_manager = position_manager
 
         # Idempotency cache: request_id -> CachedResult
         self._idempotency_cache: Dict[str, CachedResult] = {}
@@ -207,7 +210,23 @@ class ExecutionGateway:
                     await self._send_alerts(request, result)
                     return result
 
-            # 4. Check risk limits for each leg
+            # 4. Re-validate prices before execution (live mode only)
+            if request.mode in ("live", "dual"):
+                prices_valid = await self._revalidate_prices(
+                    request, request.max_slippage_cents
+                )
+                if not prices_valid:
+                    result = self._create_failed_result(
+                        request, start_time, "Prices have moved beyond acceptable slippage"
+                    )
+                    audit_id = await self._record_audit(request, result)
+                    result = ExecutionResult(
+                        **{**result.model_dump(), "audit_id": audit_id}
+                    )
+                    await self._send_alerts(request, result)
+                    return result
+
+            # 5. Check risk limits for each leg
             if self.config.require_risk_check:
                 # Get current balance for risk check
                 balance_cents = await self._get_balance_cents(request.mode)
@@ -257,13 +276,18 @@ class ExecutionGateway:
             audit_id = await self._record_audit(request, result)
             result = ExecutionResult(**{**result.model_dump(), "audit_id": audit_id})
 
-            # 8. Update circuit breaker
+            # 8. Invalidate position cache after successful execution
+            if result.success and self.position_manager:
+                self.position_manager.invalidate_cache()
+                logger.debug("Position cache invalidated after successful execution")
+
+            # 9. Update circuit breaker
             await self._update_circuit_breaker(result)
 
-            # 9. Send alerts
+            # 10. Send alerts
             await self._send_alerts(request, result)
 
-            # 10. Cache result
+            # 11. Cache result
             self._cache_result(request.request_id, result)
 
             logger.info(
@@ -489,6 +513,102 @@ class ExecutionGateway:
                 raise ValueError(f"Leg {i}: side must be 'yes' or 'no'")
             if leg.action not in ("buy", "sell"):
                 raise ValueError(f"Leg {i}: action must be 'buy' or 'sell'")
+
+        # Check for conflicting positions (cannot hold YES and NO on same market)
+        await self._check_position_conflicts(request)
+
+    async def _check_position_conflicts(self, request: ExecutionRequest) -> None:
+        """
+        Check if any leg would create a conflicting position.
+
+        Kalshi does NOT allow holding YES and NO on the same market simultaneously.
+
+        Args:
+            request: ExecutionRequest to check
+
+        Raises:
+            ValueError: If a leg would conflict with existing position
+        """
+        if not self.kalshi_client:
+            return  # Skip check if no client (paper mode only)
+
+        try:
+            positions = await self.kalshi_client.get_positions(status="open")
+            position_map = {p["ticker"]: p["side"] for p in positions}
+
+            for leg in request.legs:
+                if leg.action != "buy":
+                    continue  # Sells don't create conflicts
+
+                existing_side = position_map.get(leg.ticker)
+                if existing_side and existing_side != leg.side:
+                    raise ValueError(
+                        f"Position conflict on {leg.ticker}: "
+                        f"already have {existing_side.upper()} position, "
+                        f"cannot buy {leg.side.upper()}"
+                    )
+        except ValueError:
+            raise  # Re-raise validation errors
+        except Exception as e:
+            logger.warning(f"Could not check positions: {e}")
+
+    async def _revalidate_prices(
+        self, request: ExecutionRequest, max_slippage_cents: int = 2
+    ) -> bool:
+        """
+        Re-validate that market prices haven't moved significantly.
+
+        Fetches current orderbook and compares to expected prices.
+        Returns False if price has moved more than max_slippage_cents.
+
+        Args:
+            request: ExecutionRequest with expected prices
+            max_slippage_cents: Maximum acceptable price movement
+
+        Returns:
+            True if prices are still valid, False if stale
+        """
+        if not self.kalshi_client:
+            return True  # Skip validation in paper mode
+
+        for leg in request.legs:
+            try:
+                orderbook = await self.kalshi_client.get_orderbook(leg.ticker)
+
+                # Get current best price
+                if leg.action == "buy":
+                    # For buys, check the ask side
+                    if leg.side == "yes":
+                        asks = orderbook.get("yes", [])
+                    else:
+                        asks = orderbook.get("no", [])
+                    current_price = asks[0][0] if asks else None
+                else:
+                    # For sells, check the bid side
+                    if leg.side == "yes":
+                        bids = orderbook.get("yes", [])
+                    else:
+                        bids = orderbook.get("no", [])
+                    current_price = bids[0][0] if bids else None
+
+                if current_price is None:
+                    logger.warning(f"No orderbook depth for {leg.ticker}")
+                    continue
+
+                slippage = abs(current_price - leg.price_cents)
+                if slippage > max_slippage_cents:
+                    logger.warning(
+                        f"Price stale for {leg.ticker}: "
+                        f"expected {leg.price_cents}c, current {current_price}c, "
+                        f"slippage {slippage}c > max {max_slippage_cents}c"
+                    )
+                    return False
+
+            except Exception as e:
+                logger.warning(f"Price validation failed for {leg.ticker}: {e}")
+                # Don't fail on validation errors, proceed with execution
+
+        return True
 
     async def _execute_paper(self, request: ExecutionRequest) -> ExecutionResult:
         """
