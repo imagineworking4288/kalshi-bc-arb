@@ -12,8 +12,11 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 import asyncio
+import logging
 
 from ..services.nws import NWSProductionClient, get_forecast, NWS_GRID_POINTS
+
+logger = logging.getLogger(__name__)
 from ..services.analysis import (
     PredictionEngineV2,
     BracketAnalysis,
@@ -217,7 +220,8 @@ async def _get_city_markets(city: str) -> List[Dict[str, Any]]:
                     "event_ticker": event.get("event_ticker"),
                 })
         return markets
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to fetch markets for {series}: {e}")
         return []
 
 
@@ -243,7 +247,8 @@ async def _get_positions_for_city(city: str) -> List[PositionInfo]:
                     avg_cost_cents=pos.get("market_exposure", 0) / max(1, abs(position_count)),
                 ))
         return city_positions
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to fetch positions for {city}: {e}")
         return []
 
 

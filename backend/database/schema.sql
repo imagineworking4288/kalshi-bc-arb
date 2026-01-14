@@ -1,8 +1,10 @@
 -- Paper trading account (single row)
+-- NOTE: balance and starting_balance are stored in DOLLARS (not cents)
+-- When interfacing with API (which uses cents), multiply by 100
 CREATE TABLE IF NOT EXISTS paper_account (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    balance REAL NOT NULL DEFAULT 10000.00,
-    starting_balance REAL NOT NULL DEFAULT 10000.00,
+    balance REAL NOT NULL DEFAULT 10000.00,  -- Balance in dollars
+    starting_balance REAL NOT NULL DEFAULT 10000.00,  -- Starting balance in dollars
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

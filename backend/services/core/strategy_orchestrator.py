@@ -4,7 +4,7 @@ Coordinates all strategies, manages execution pipeline, and controls trading.
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Set
 
 from .base_strategy import BaseStrategy, TradingSignal, StrategyType, SignalStatus
@@ -126,7 +126,7 @@ class StrategyOrchestrator:
                 return
 
             self._is_running = True
-            self._start_time = datetime.utcnow()
+            self._start_time = datetime.now(timezone.utc)
 
             # Start scan loops for enabled strategies
             for strategy_type, strategy in self._strategies.items():
@@ -293,9 +293,8 @@ class StrategyOrchestrator:
             # For arbitrage, use the signal's recommended size or calculate based on cost
             contracts = signal.recommended_size
         else:
-            # Get balance for Kelly calculation
-            # TODO: Get actual balance from executor
-            balance_cents = 100000  # Default $1000
+            # Get actual balance for Kelly calculation
+            balance_cents = await self._get_balance_cents()
 
             kelly_result = self.kelly.calculate(
                 signal.model_prob,
@@ -314,11 +313,12 @@ class StrategyOrchestrator:
             contracts = kelly_result.contracts
 
         # Step 3: Check risk limits
+        balance_cents = await self._get_balance_cents()
         risk_check = await self.risk.check_trade(
             signal.ticker,
             contracts,
             signal.market_price,
-            100000  # TODO: actual balance
+            balance_cents
         )
 
         if not risk_check.approved:
@@ -477,7 +477,7 @@ class StrategyOrchestrator:
         """Get complete orchestrator status."""
         uptime = None
         if self._start_time:
-            uptime = (datetime.utcnow() - self._start_time).total_seconds()
+            uptime = (datetime.now(timezone.utc) - self._start_time).total_seconds()
 
         return {
             "is_running": self._is_running,
@@ -590,7 +590,37 @@ class StrategyOrchestrator:
                 self.risk.limits.max_position_per_market,
                 self.risk.limits.max_daily_loss_cents,
                 self.circuit.config.max_consecutive_losses,
-                datetime.utcnow().isoformat()
+                datetime.now(timezone.utc).isoformat()
             ))
             await conn.commit()
             logger.info("Saved orchestrator config to database")
+
+    async def _get_balance_cents(self) -> int:
+        """
+        Get current account balance in cents.
+
+        Fetches from paper service (paper mode) or executor (live mode).
+        Falls back to 100000 cents ($1000) on error.
+
+        Returns:
+            Balance in cents
+        """
+        try:
+            # Try to get balance from executor's paper service
+            if hasattr(self.executor, 'paper_service') and self.executor.paper_service:
+                balance_info = await self.executor.paper_service.get_balance()
+                # Paper service returns dollars, convert to cents
+                return int(balance_info.get("available_balance", 0) * 100)
+
+            # Try to get balance from executor's kalshi client (live mode)
+            if hasattr(self.executor, 'kalshi_client') and self.executor.kalshi_client:
+                balance_info = await self.executor.kalshi_client.get_balance()
+                # Kalshi returns cents
+                return int(balance_info.get("available_balance", 0))
+
+        except Exception as e:
+            logger.warning(f"Failed to get balance: {e}")
+
+        # Fallback to default
+        logger.warning("Using fallback balance of $1000 (100000 cents)")
+        return 100000

@@ -335,8 +335,8 @@ class ExecutionGateway:
                     message=str(e),
                     data={"request_id": request.request_id},
                 )
-            except Exception:
-                pass
+            except Exception as alert_err:
+                logger.error(f"Failed to send error alert: {alert_err}")
 
             return result
 
@@ -537,6 +537,7 @@ class ExecutionGateway:
         Check if any leg would create a conflicting position.
 
         Kalshi does NOT allow holding YES and NO on the same market simultaneously.
+        This check is enforced in both live and paper modes.
 
         Args:
             request: ExecutionRequest to check
@@ -544,12 +545,17 @@ class ExecutionGateway:
         Raises:
             ValueError: If a leg would conflict with existing position
         """
-        if not self.kalshi_client:
-            return  # Skip check if no client (paper mode only)
+        position_map = {}
 
         try:
-            positions = await self.kalshi_client.get_positions(status="open")
-            position_map = {p["ticker"]: p["side"] for p in positions}
+            # Get positions from live client if available
+            if self.kalshi_client:
+                positions = await self.kalshi_client.get_positions(status="open")
+                position_map = {p["ticker"]: p["side"] for p in positions}
+            # Also check paper positions (for paper mode or dual mode)
+            elif self.paper_service:
+                positions = await self.paper_service.get_positions(include_settled=False)
+                position_map = {p["ticker"]: p["side"] for p in positions}
 
             for leg in request.legs:
                 if leg.action != "buy":
@@ -573,18 +579,28 @@ class ExecutionGateway:
         """
         Re-validate that market prices haven't moved significantly.
 
+        TOCTOU MITIGATION: This method is called immediately before execution
+        to minimize the window between price check and order placement.
+        Combined with limit orders, this ensures we only trade at acceptable prices.
+
         Fetches current orderbook and compares to expected prices.
         Returns False if price has moved more than max_slippage_cents.
 
         Args:
             request: ExecutionRequest with expected prices
-            max_slippage_cents: Maximum acceptable price movement
+            max_slippage_cents: Maximum acceptable price movement (default: 2 cents)
 
         Returns:
             True if prices are still valid, False if stale
         """
         if not self.kalshi_client:
-            return True  # Skip validation in paper mode
+            # Paper-only mode without API connection - cannot fetch fresh prices
+            # Log a warning since paper trades will execute at stale prices
+            logger.debug(
+                "Skipping price revalidation in paper-only mode (no API connection). "
+                "Paper trades may execute at stale prices."
+            )
+            return True
 
         for leg in request.legs:
             try:
@@ -669,8 +685,8 @@ class ExecutionGateway:
 
         except Exception as e:
             logger.warning(f"Market open check failed for {ticker}: {e}")
-            # Don't fail on check errors, proceed with execution
-            return True
+            # Fail-closed: block execution when we can't verify market is open
+            return False
 
     async def _execute_paper(self, request: ExecutionRequest) -> ExecutionResult:
         """

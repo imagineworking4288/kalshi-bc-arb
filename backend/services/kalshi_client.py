@@ -57,9 +57,9 @@ class KalshiClient:
                 self.settings.kalshi_private_key_path
             )
 
-        # Rate limiters (Kalshi Free tier: 10 req/sec)
+        # Rate limiters (Kalshi Free tier: 10 req/sec for both reads and writes)
         self._read_limiter = RateLimiter(max_requests=10, window_seconds=1.0)
-        self._write_limiter = RateLimiter(max_requests=5, window_seconds=1.0)
+        self._write_limiter = RateLimiter(max_requests=10, window_seconds=1.0)
 
     async def _request(
         self,

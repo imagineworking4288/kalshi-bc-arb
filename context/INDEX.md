@@ -152,6 +152,8 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/utils/__init__.py | Utils module exports |
 | backend/utils/kalshi_auth.py | RSA-PSS signature authentication |
 | backend/utils/logger.py | Logging system with activity buffer |
+| bug_hunt/CHANGES_SUMMARY.md | Comprehensive bug fix summary with validation results and change documentation |
+| bug_hunt/pre_analysis.py | Pre-analysis diagnostic script for bug hunting and code quality assessment |
 | frontend/postcss.config.js | PostCSS config for Tailwind |
 | frontend/tailwind.config.js | Tailwind CSS configuration |
 | frontend/vite.config.ts | Vite bundler configuration |

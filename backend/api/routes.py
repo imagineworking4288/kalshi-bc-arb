@@ -125,7 +125,8 @@ async def get_opportunities(
 
         try:
             settlement = datetime.fromisoformat(settlement_str.replace("Z", "+00:00"))
-        except:
+        except ValueError:
+            # Skip markets with invalid date format
             continue
 
         # Skip expired

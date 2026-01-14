@@ -1145,3 +1145,15 @@ Backwards compatibility result structure
 | is_maker | bool | Whether this was a maker order |
 | was_capped | bool | Whether fee was capped at minimum (default: False) |
 | raw_fee_cents | float | Raw calculated fee before rounding (default: 0.0) |
+
+### FeeBreakdown (backend/services/core/fee_calculator.py)
+Backwards compatibility object for calculate_trade_fee method
+
+| Field | Type | Description |
+|-------|------|-------------|
+| price_cents | int | Price in cents used for calculation |
+| contracts | int | Number of contracts |
+| order_type | FeeType | TAKER or MAKER order type |
+| fee_per_contract | float | Fee per single contract |
+| total_fee | int | Total fee in cents |
+| fee_percentage | float | Fee as percentage of gross cost |

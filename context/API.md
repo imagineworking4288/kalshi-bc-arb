@@ -415,6 +415,13 @@ Weather arbitrage scanner for 14 market series (7 cities × 2 types)
 
 ## backend/services/analysis/
 
+### __init__.py
+Analysis module exports
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| calculate_multi_leg_fee | legs: list, fee_type: FeeType = TAKER | tuple | Calculate fees for multiple trade legs (re-exported from core.fee_calculator) |
+
 ### prediction_engine_v2.py
 Enhanced weather prediction engine with fee-aware analysis and position awareness
 
@@ -678,6 +685,9 @@ Consolidated fee calculation service
 | FeeCalculator.calculate_multi_leg | legs: List[Dict[str, Any]], fee_type: FeeType = TAKER | Dict[str, Any] | Calculate fees for multiple trade legs with per-leg precision |
 | FeeCalculator.estimate_arbitrage_profit | legs: List[Dict[str, Any]], payout_cents: int = 100, fee_type: FeeType = TAKER | Dict[str, Any] | Estimate profit from arbitrage opportunity |
 | FeeCalculator.analyze_weather_arbitrage | yes_asks: List[int], no_asks: List[int], order_type: FeeType = TAKER | Dict[str, Any] | Analyze all three weather bracket arbitrage strategies |
+| FeeCalculator.fee_per_contract | price_cents: int, order_type: FeeType = TAKER | float | Calculate fee per single contract (backwards-compatible class method) |
+| FeeCalculator.calculate_trade_fee | price_cents: int, contracts: int, order_type: FeeType = TAKER | FeeBreakdown | Calculate fee breakdown (backwards-compatible class method) |
+| calculate_multi_leg_fee | legs: list, fee_type: FeeType = TAKER | tuple | Calculate fees for multiple trade legs, returns (total_fee_cents, list_of_per_leg_fees) |
 
 ---
 
@@ -1211,6 +1221,16 @@ Integration test suite verifying complete application startup
 | wait_for_startup | proc: subprocess.Popen, timeout: int = 20 | bool | Wait for server to be ready by polling health endpoint |
 | test_endpoint | name: str, method: str, path: str, expected_status: int = 200, json_body: dict = None | bool | Test single API endpoint with timeout and status validation |
 | main | - | int | Start server on port 8099, test all endpoints, cleanup on exit |
+
+### bug_hunt/pre_analysis.py
+Pre-analysis diagnostic script for bug hunting and code quality assessment
+
+| Function | Params | Returns | Description |
+|----------|--------|---------|-------------|
+| run_cmd | cmd: str, capture: bool = True | str | Execute shell command and return output |
+| header | title: str | None | Print formatted section header |
+| find_pattern | pattern: str, description: str, directory: str = "backend" | int | Search for pattern in codebase and report matches |
+| main | - | None | Run complete pre-analysis suite including fee patterns, error handling, async issues |
 
 ---
 

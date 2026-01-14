@@ -12,6 +12,7 @@ from ..core.fee_calculator import (
     FeeCalculator,
     FeeResult,
     calculate_fee,
+    calculate_multi_leg_fee,
 )
 
 from .probability_engine import (
@@ -61,6 +62,7 @@ __all__ = [
     'FeeCalculator',
     'FeeResult',
     'calculate_fee',
+    'calculate_multi_leg_fee',
 
     # Probability (v1)
     'ProbabilityEngine',

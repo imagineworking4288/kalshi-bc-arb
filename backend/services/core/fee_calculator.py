@@ -362,14 +362,21 @@ class FeeCalculator:
         """
         Analyze all three weather bracket arbitrage strategies.
 
+        IMPORTANT: This analysis assumes brackets are MUTUALLY EXCLUSIVE.
+        Exactly one bracket will win (e.g., temperature falls in one range).
+        If brackets can overlap or multiple can win, this analysis is invalid.
+
         Strategies:
         - all_yes: Buy YES on every bracket. Profitable if sum(yes_asks) + fees < 100
+          (Exactly one YES wins -> $1 payout guaranteed)
         - all_no: Buy NO on every bracket. Profitable if sum(no_asks) + fees < (n-1)*100
+          (All but one NO wins -> (n-1) * $1 payout)
         - min_2_no: Buy NO on 2 cheapest. Profitable if sum(2 cheapest no) + fees < 100
+          (If neither bracket wins, both NOs pay -> $1 payout)
 
         Args:
-            yes_asks: List of YES ask prices in cents
-            no_asks: List of NO ask prices in cents
+            yes_asks: List of YES ask prices in cents (must be mutually exclusive brackets)
+            no_asks: List of NO ask prices in cents (must be mutually exclusive brackets)
             order_type: TAKER or MAKER for fee calculation
 
         Returns:
@@ -447,7 +454,9 @@ class FeeCalculator:
                 calc.calculate(1, p, order_type).fee_cents
                 for p, _ in cheapest_two if 1 <= p <= 99
             )
-            min_2_payout = 100  # If neither bracket wins, both NOs pay
+            # If neither of the 2 cheapest brackets wins, both NOs pay $1 each = $1 total
+            # (We only need one winning NO for the $1 payout since they're mutually exclusive)
+            min_2_payout = 100
 
             min_2_no = {
                 "cost": min_2_cost,
@@ -483,6 +492,60 @@ class FeeCalculator:
             "has_arbitrage": best_strategy is not None
         }
 
+    @classmethod
+    def fee_per_contract(cls, price_cents: int, order_type: FeeType = FeeType.TAKER) -> float:
+        """
+        Calculate fee per single contract at given price.
+
+        Backwards-compatible class method for routes.py API endpoints.
+
+        Args:
+            price_cents: Price in cents (1-99)
+            order_type: TAKER (7%) or MAKER (3.5%)
+
+        Returns:
+            Fee in cents as float
+        """
+        if not 1 <= price_cents <= 99:
+            return 0.0
+        rate = cls.TAKER_RATE if order_type == FeeType.TAKER else cls.MAKER_RATE
+        price_decimal = price_cents / 100.0
+        return rate * price_decimal * (1 - price_decimal) * 100
+
+    @classmethod
+    def calculate_trade_fee(cls, price_cents: int, contracts: int, order_type: FeeType = FeeType.TAKER):
+        """
+        Calculate fee breakdown for a trade.
+
+        Backwards-compatible class method for routes.py API endpoints.
+
+        Args:
+            price_cents: Price in cents (1-99)
+            contracts: Number of contracts
+            order_type: TAKER (7%) or MAKER (3.5%)
+
+        Returns:
+            Object with fee breakdown attributes
+        """
+        calc = cls()
+        result = calc.calculate(contracts, price_cents, order_type)
+        fee_per = cls.fee_per_contract(price_cents, order_type)
+        gross_cost = contracts * price_cents
+        fee_pct = (result.fee_cents / gross_cost * 100) if gross_cost > 0 else 0.0
+
+        # Return a simple object with the expected attributes
+        class FeeBreakdown:
+            pass
+
+        breakdown = FeeBreakdown()
+        breakdown.price_cents = price_cents
+        breakdown.contracts = contracts
+        breakdown.order_type = order_type
+        breakdown.fee_per_contract = fee_per
+        breakdown.total_fee = result.fee_cents
+        breakdown.fee_percentage = fee_pct
+        return breakdown
+
 
 # Convenience function for simple fee calculation
 def calculate_fee(
@@ -504,3 +567,36 @@ def calculate_fee(
     calc = FeeCalculator()
     result = calc.calculate(contracts, price_cents, fee_type)
     return result.fee_cents
+
+
+def calculate_multi_leg_fee(
+    legs: list,
+    fee_type: FeeType = FeeType.TAKER,
+) -> tuple:
+    """
+    Convenience function to calculate fees for multiple trade legs.
+
+    Args:
+        legs: List of tuples (contracts, price_cents) or dicts with those keys
+        fee_type: TAKER or MAKER
+
+    Returns:
+        Tuple of (total_fee_cents, list of per-leg fees)
+    """
+    calc = FeeCalculator()
+    leg_fees = []
+
+    for leg in legs:
+        if isinstance(leg, dict):
+            contracts = leg.get("contracts", 0)
+            price_cents = leg.get("price_cents", leg.get("price", 0))
+        else:
+            contracts, price_cents = leg
+
+        if contracts > 0 and 1 <= price_cents <= 99:
+            result = calc.calculate(contracts, price_cents, fee_type)
+            leg_fees.append(result.fee_cents)
+        else:
+            leg_fees.append(0)
+
+    return sum(leg_fees), leg_fees

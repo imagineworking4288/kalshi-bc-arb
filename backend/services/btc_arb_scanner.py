@@ -11,7 +11,7 @@ import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 
 from ..utils.logger import btc_arb_logger as logger, btc_arb_activity
@@ -44,7 +44,7 @@ class ArbOpportunity:
     guaranteed_payout_cents: int = 100
     edge_cents: int = 0
     edge_percent: float = 0.0
-    detected_at: str = field(default_factory=lambda: datetime.utcnow().isoformat() + 'Z')
+    detected_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'))
     range_description: str = ""
 
     def __post_init__(self):
@@ -129,7 +129,7 @@ class ScanResult:
     threshold_markets: List[SimplifiedMarket]
     calculations: List[CalculationResult]
     stats: Dict
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat() + 'Z')
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'))
 
     def to_dict(self):
         return {
@@ -706,7 +706,7 @@ class BTCArbitrageScanner:
             'count': len(opportunities),
             'scan_count': stats['total_scans'],
             'last_scan_duration_ms': stats['last_scan_duration_ms'],
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
             'stats': last_result.stats if last_result else {}
         }
 

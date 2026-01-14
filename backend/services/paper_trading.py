@@ -12,32 +12,52 @@ from .arbitrage_detector import ArbitrageOpportunity
 
 @dataclass
 class PaperOrderResult:
+    """Result of a single paper order leg. All monetary values are in cents."""
     ticker: str
     side: str
     contracts: int
-    fill_price: float
-    fee: float
+    fill_price: int  # Price in cents (1-99)
+    fee: int  # Fee in cents
     status: str = "filled"
 
 
 @dataclass
 class PaperTradeResult:
+    """Result of a paper trade. All monetary values are in cents."""
     trade_id: str
     status: str
     orders: List[PaperOrderResult]
-    total_cost: float
-    total_fees: float
-    expected_payout: float
-    expected_profit: float
-    expected_profit_pct: float
+    total_cost: int  # Total cost in cents
+    total_fees: int  # Total fees in cents
+    expected_payout: int  # Expected payout in cents (100 per contract)
+    expected_profit: int  # Expected profit in cents
+    expected_profit_pct: float  # Percentage profit
     message: str
     paper_mode: bool = True
 
 
 class PaperTradingService:
-    """Simulates trades locally using real market prices"""
+    """
+    Simulates trades locally using real market prices.
+
+    UNIT CONVENTION:
+    - Database stores balance in DOLLARS (REAL type)
+    - get_balance() returns dollars (for backward compatibility)
+    - Callers needing cents should multiply by 100
+    - Trade costs/fees are tracked in cents internally
+    """
 
     async def get_balance(self) -> dict:
+        """
+        Get current paper account balance.
+
+        Returns dict with:
+        - available_balance: Balance in DOLLARS (float)
+        - starting_balance: Starting balance in DOLLARS (float)
+        - paper_mode: Always True
+
+        NOTE: Returns DOLLARS. Multiply by 100 for cents.
+        """
         async with db.connection() as conn:
             cursor = await conn.execute(
                 "SELECT balance, starting_balance FROM paper_account WHERE id = 1"
@@ -100,21 +120,28 @@ class PaperTradingService:
         total_fees = 0
 
         for bracket in opportunity.brackets:
-            cost = num_contracts * bracket.yes_price
-            fee = calculate_fee(num_contracts, bracket.yes_price)
+            # Ensure price is in cents (convert from decimal if needed)
+            price_cents = bracket.yes_price
+            if isinstance(price_cents, float) and price_cents < 1.0:
+                # Price was passed as decimal (0-1), convert to cents
+                price_cents = int(price_cents * 100)
+            price_cents = int(price_cents)  # Ensure int
+
+            cost = num_contracts * price_cents
+            fee = calculate_fee(num_contracts, price_cents)
 
             orders.append(PaperOrderResult(
                 ticker=bracket.ticker,
                 side="yes",
                 contracts=num_contracts,
-                fill_price=bracket.yes_price,
+                fill_price=price_cents,  # Always in cents
                 fee=fee
             ))
 
             total_cost += cost
             total_fees += fee
 
-        expected_payout = num_contracts  # $1 per contract set
+        expected_payout = num_contracts * 100  # 100 cents ($1) per contract set
         expected_profit = expected_payout - total_cost - total_fees
         expected_profit_pct = (expected_profit / (total_cost + total_fees)) * 100 if total_cost > 0 else 0
 
@@ -248,7 +275,7 @@ class PaperTradingService:
             if not position:
                 return {"error": "Position not found"}
 
-            payout = position["contracts"] if won else 0
+            payout = position["contracts"] * 100 if won else 0  # 100 cents per contract
             cost_basis = position["total_cost"] + position["total_fees"]
             realized_pnl = payout - cost_basis
 

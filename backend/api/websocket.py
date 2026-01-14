@@ -19,7 +19,8 @@ class ConnectionManager:
         for connection in self.active_connections:
             try:
                 await connection.send_json(message)
-            except:
+            except (RuntimeError, WebSocketDisconnect, Exception) as e:
+                # Connection closed or failed - remove from active connections
                 self.active_connections.discard(connection)
 
 
