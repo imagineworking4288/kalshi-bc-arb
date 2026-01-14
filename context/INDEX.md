@@ -68,8 +68,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | File | Description |
 |------|-------------|
 | README.md | Project documentation and setup |
-| ARCHITECTURE.md | 4-terminal architecture documentation |
-| QUICKSTART.md | First time setup guide |
+| PROMPT.md | Project prompt and context documentation |
 | docker-compose.yml | Docker container configuration |
 | .claude/settings.local.json | Claude configuration settings |
 | backend/main.py | FastAPI app entry point |

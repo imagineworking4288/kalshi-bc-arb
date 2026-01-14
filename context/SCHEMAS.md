@@ -1111,3 +1111,37 @@
 | import_success | bool | Whether module imported successfully |
 | instantiation_success | bool | Whether class could be instantiated |
 | error | Optional[str] | Error message if test failed |
+
+---
+
+## Fee Calculation (backend/services/core/fee_calculator.py)
+
+### FeeType
+Enum for order execution types
+
+| Value | Description |
+|-------|-------------|
+| TAKER | Market orders or limit orders that cross the spread (7% rate) |
+| MAKER | Limit orders that add liquidity to the order book (3.5% rate) |
+
+### FeeCalculation
+Complete fee calculation result for a single trade
+
+| Field | Type | Description |
+|-------|------|-------------|
+| gross_cost_cents | int | Cost before fees (contracts * price_cents) |
+| fee_cents | int | Calculated fee in cents (integer, rounded up) |
+| total_cost_cents | int | Total cost including fees (gross_cost + fee) |
+| fee_type | FeeType | Whether this was a taker or maker order |
+| fee_rate | float | The rate applied (0.07 for taker, 0.035 for maker) |
+
+### FeeResult
+Backwards compatibility result structure
+
+| Field | Type | Description |
+|-------|------|-------------|
+| fee_cents | float | Fee amount in cents |
+| fee_dollars | float | Fee amount in dollars |
+| is_maker | bool | Whether this was a maker order |
+| was_capped | bool | Whether fee was capped at minimum (default: False) |
+| raw_fee_cents | float | Raw calculated fee before rounding (default: 0.0) |

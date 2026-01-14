@@ -352,6 +352,137 @@ class FeeCalculator:
             "is_profitable": profit > 0,
         }
 
+    @classmethod
+    def analyze_weather_arbitrage(
+        cls,
+        yes_asks: List[int],
+        no_asks: List[int],
+        order_type: FeeType = FeeType.TAKER
+    ) -> Dict[str, Any]:
+        """
+        Analyze all three weather bracket arbitrage strategies.
+
+        Strategies:
+        - all_yes: Buy YES on every bracket. Profitable if sum(yes_asks) + fees < 100
+        - all_no: Buy NO on every bracket. Profitable if sum(no_asks) + fees < (n-1)*100
+        - min_2_no: Buy NO on 2 cheapest. Profitable if sum(2 cheapest no) + fees < 100
+
+        Args:
+            yes_asks: List of YES ask prices in cents
+            no_asks: List of NO ask prices in cents
+            order_type: TAKER or MAKER for fee calculation
+
+        Returns:
+            Dict with all_yes, all_no, min_2_no strategies and best_strategy
+        """
+        calc = cls()
+        n = len(yes_asks)
+
+        # Empty result structure
+        def empty_strategy(brackets_used=0):
+            return {
+                "cost": 0, "fees": 0, "net_cost": 0,
+                "payout": 0, "gross_profit": 0, "net_profit": 0,
+                "is_arb": False, "brackets_used": brackets_used
+            }
+
+        if n == 0:
+            return {
+                "all_yes": empty_strategy(),
+                "all_no": empty_strategy(),
+                "min_2_no": {**empty_strategy(), "cheapest_indices": [], "brackets": []},
+                "best_strategy": None,
+                "has_arbitrage": False
+            }
+
+        # === ALL YES Strategy ===
+        # Buy YES on all brackets - exactly one pays out $1
+        all_yes_cost = sum(yes_asks)
+        all_yes_fees = sum(
+            calc.calculate(1, p, order_type).fee_cents
+            for p in yes_asks if 1 <= p <= 99
+        )
+        all_yes_payout = 100  # One bracket wins
+        all_yes = {
+            "cost": all_yes_cost,
+            "fees": all_yes_fees,
+            "net_cost": all_yes_cost + all_yes_fees,
+            "payout": all_yes_payout,
+            "gross_profit": all_yes_payout - all_yes_cost,
+            "net_profit": all_yes_payout - all_yes_cost - all_yes_fees,
+            "is_arb": (all_yes_payout - all_yes_cost - all_yes_fees) > 0,
+            "brackets_used": n
+        }
+
+        # === ALL NO Strategy ===
+        # Buy NO on all brackets - (n-1) pay out $1 each
+        all_no_cost = sum(no_asks)
+        all_no_fees = sum(
+            calc.calculate(1, p, order_type).fee_cents
+            for p in no_asks if 1 <= p <= 99
+        )
+        all_no_payout = (n - 1) * 100  # All but one bracket pays
+        all_no = {
+            "cost": all_no_cost,
+            "fees": all_no_fees,
+            "net_cost": all_no_cost + all_no_fees,
+            "payout": all_no_payout,
+            "gross_profit": all_no_payout - all_no_cost,
+            "net_profit": all_no_payout - all_no_cost - all_no_fees,
+            "is_arb": (all_no_payout - all_no_cost - all_no_fees) > 0,
+            "brackets_used": n
+        }
+
+        # === MIN 2 NO Strategy ===
+        # Buy NO on 2 cheapest brackets - if neither wins, both pay $1
+        min_2_no = {**empty_strategy(2), "cheapest_indices": [], "brackets": []}
+        if n >= 2:
+            # Find 2 cheapest NO prices with their indices
+            indexed = [(price, idx) for idx, price in enumerate(no_asks)]
+            indexed.sort(key=lambda x: x[0])
+            cheapest_two = indexed[:2]
+
+            min_2_cost = cheapest_two[0][0] + cheapest_two[1][0]
+            min_2_fees = sum(
+                calc.calculate(1, p, order_type).fee_cents
+                for p, _ in cheapest_two if 1 <= p <= 99
+            )
+            min_2_payout = 100  # If neither bracket wins, both NOs pay
+
+            min_2_no = {
+                "cost": min_2_cost,
+                "fees": min_2_fees,
+                "net_cost": min_2_cost + min_2_fees,
+                "payout": min_2_payout,
+                "gross_profit": min_2_payout - min_2_cost,
+                "net_profit": min_2_payout - min_2_cost - min_2_fees,
+                "is_arb": (min_2_payout - min_2_cost - min_2_fees) > 0,
+                "brackets_used": 2,
+                "cheapest_indices": [cheapest_two[0][1], cheapest_two[1][1]],
+                "brackets": []
+            }
+
+        # Determine best strategy
+        strategies = [
+            ("all_yes", all_yes),
+            ("all_no", all_no),
+            ("min_2_no", min_2_no)
+        ]
+
+        profitable = [(name, s) for name, s in strategies if s["is_arb"]]
+        best_strategy = None
+        if profitable:
+            # Pick the one with highest net profit
+            best_strategy = max(profitable, key=lambda x: x[1]["net_profit"])[0]
+
+        return {
+            "all_yes": all_yes,
+            "all_no": all_no,
+            "min_2_no": min_2_no,
+            "best_strategy": best_strategy,
+            "has_arbitrage": best_strategy is not None
+        }
+
 
 # Convenience function for simple fee calculation
 def calculate_fee(

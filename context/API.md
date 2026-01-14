@@ -692,10 +692,10 @@ Consolidated fee calculation service
 | Class/Function | Params | Returns | Description |
 |----------|--------|---------|-------------|
 | FeeCalculator | - | - | Initialize consolidated fee calculator |
-| FeeCalculator.calculate | contracts: int, price_cents: int, is_maker: bool = False | int | Calculate Kalshi fees in cents |
-| FeeCalculator.calculate_for_legs | legs: List[dict] | int | Calculate total fees for multi-leg trade |
-| FeeCalculator.calculate_batch | legs: List[OrderLeg] | dict | Calculate fees for BatchExecutor legs |
-| FeeCalculator.get_fee_rate | price_cents: int | float | Get fee rate for price level |
+| FeeCalculator.calculate | contracts: int, price_cents: int, fee_type: FeeType = TAKER | FeeCalculation | Calculate fee for a single trade |
+| FeeCalculator.calculate_multi_leg | legs: List[Dict[str, Any]], fee_type: FeeType = TAKER | Dict[str, Any] | Calculate fees for multiple trade legs with per-leg precision |
+| FeeCalculator.estimate_arbitrage_profit | legs: List[Dict[str, Any]], payout_cents: int = 100, fee_type: FeeType = TAKER | Dict[str, Any] | Estimate profit from arbitrage opportunity |
+| FeeCalculator.analyze_weather_arbitrage | yes_asks: List[int], no_asks: List[int], order_type: FeeType = TAKER | Dict[str, Any] | Analyze all three weather bracket arbitrage strategies |
 
 ---
 
