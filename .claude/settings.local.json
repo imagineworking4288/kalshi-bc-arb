@@ -62,7 +62,14 @@
       "Bash(timeout 20 python -m pytest:*)",
       "Bash(dir:*)",
       "Bash(timeout:*)",
-      "Bash(ping:*)"
+      "Bash(ping:*)",
+      "Bash(grep:*)",
+      "Bash(__NEW_LINE_ee751cb71786c9aa__ echo \"\")",
+      "Bash(__NEW_LINE_ee751cb71786c9aa__ echo \"All .py files in project:\")",
+      "Bash(__NEW_LINE_ee751cb71786c9aa__ find . -name \"*.py\" -not -path \"./backend/venv/*\")",
+      "Bash(__NEW_LINE_2c72fc55388bbe99__ echo \"\")",
+      "Bash(__NEW_LINE_2c72fc55388bbe99__ echo \"Files in INDEX.md file tree:\")",
+      "Bash(__NEW_LINE_2c72fc55388bbe99__ grep \"\\\\.py |\" context/INDEX.md)"
     ]
   }
 }

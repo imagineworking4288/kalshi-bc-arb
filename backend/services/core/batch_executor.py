@@ -11,7 +11,7 @@ from enum import Enum
 from typing import List, Optional, Dict, Any, Literal
 import warnings
 
-from backend.logging_config import get_logger
+from backend.services.log_config import get_logger
 
 logger = get_logger("batch_executor")
 

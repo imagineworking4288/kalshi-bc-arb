@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from backend.config.locations import get_all_locations, LocationConfig
-from backend.config.fees import FeeCalculator
+from backend.services.core.fee_calculator import FeeCalculator
 from backend.services.nws_client import NWSClient
 from backend.services.arbitrage_calculator import ArbitrageCalculator
 from backend.services.log_config import get_logger

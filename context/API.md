@@ -10,25 +10,6 @@ FastAPI application entry point with lifespan management
 | lifespan | app: FastAPI | AsyncGenerator | Init database, auto-trader, BTC arbitrage engine, strategy orchestrator, print startup banner, handle shutdown |
 | health | - | dict | Health check endpoint, returns status and paper mode |
 
-### config.py
-Application settings from environment variables
-
-| Function/Property | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| Settings | - | BaseSettings | Pydantic settings class with Kalshi/trading config |
-| Settings.kalshi_ws_url | - | str | Property: derive WebSocket URL from API URL |
-| Settings.has_kalshi_credentials | - | bool | Property: check if API key and private key exist |
-| get_settings | - | Settings | Cached settings singleton via lru_cache |
-
-### logging_config.py
-Thread-safe logging with QueueHandler pattern to avoid Windows PermissionError
-
-| Function | Params | Returns | Description |
-|----------|--------|---------|-------------|
-| setup_logging | log_dir: str = "logs", log_level: int = INFO, max_bytes: int = 10MB, backup_count: int = 5, console_output: bool = True | Logger | Initialize thread-safe logging with queue-based rotation, call once at startup |
-| shutdown_logging | - | None | Clean shutdown of logging system, called automatically via atexit |
-| get_logger | name: str | Logger | Get named logger, use instead of logging.getLogger() |
-
 ---
 
 ## backend/api/
@@ -682,6 +663,7 @@ Single entry point for all trade execution with risk checks, price validation, a
 | ExecutionGateway.execute_arbitrage | legs: List[dict], contracts_per_leg: int, mode="paper", source="strategy" | ExecutionResult | Execute arbitrage trade with validation |
 | ExecutionGateway._check_position_conflicts | request: ExecutionRequest | None | Validate no YES+NO conflicts on same market |
 | ExecutionGateway._revalidate_prices | request: ExecutionRequest, max_slippage_cents=2 | bool | Check prices haven't moved beyond slippage |
+| ExecutionGateway._check_market_open | ticker: str, min_seconds=60 | bool | Check market is open and not closing within min_seconds |
 | ExecutionGateway.get_status | - | dict | Get gateway configuration and cache status |
 | ExecutionGateway.get_recent_audits | limit=50 | List[Dict] | Get execution audit history |
 | ExecutionGateway.clear_cache | - | int | Clear idempotency cache, return cleared count |

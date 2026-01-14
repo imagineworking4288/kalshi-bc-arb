@@ -530,9 +530,6 @@ async def remove_from_watchlist(ticker: str):
 # Auto-trader has been replaced by StrategyOrchestrator.
 # These endpoints now redirect to orchestrator or return deprecation notices.
 
-auto_trader_instance = None  # Keep for backwards compatibility, always None
-
-
 @router.get("/auto-trader/status")
 async def get_auto_trader_status():
     """
@@ -644,25 +641,9 @@ async def get_signals(status: Optional[str] = None, limit: int = 50):
 
 
 # ===========================================
-# BTC ARBITRAGE ENGINE (DEPRECATED)
-# ===========================================
-# BTCArbitrageEngine has been replaced by BTCArbitrageStrategy in the orchestrator.
-btc_arb_engine_instance = None  # Keep for backwards compatibility, always None
-
-
-def get_btc_arb_engine():
-    """DEPRECATED: BTCArbitrageEngine has been removed."""
-    raise HTTPException(410, "BTCArbitrageEngine has been removed. Use /api/orchestrator endpoints instead.")
-
-
-def set_btc_arb_engine(engine):
-    """DEPRECATED: No-op for backwards compatibility."""
-    logger.warning("set_btc_arb_engine called but BTCArbitrageEngine has been removed")
-
-
-# ===========================================
 # BTC ARBITRAGE ENDPOINTS (DEPRECATED)
 # ===========================================
+# BTCArbitrageEngine has been replaced by BTCArbitrageStrategy in the orchestrator.
 
 @router.get("/btc-arb/status")
 async def get_btc_arb_status():

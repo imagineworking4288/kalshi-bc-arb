@@ -58,7 +58,7 @@ from backend.services.core.risk_manager import RiskManager
 from backend.services.core.circuit_breaker import CircuitBreaker
 from backend.services.core.fee_calculator import FeeCalculator, FeeType
 from backend.services.core.alert_service import AlertService
-from backend.logging_config import get_logger
+from backend.services.log_config import get_logger
 
 logger = get_logger("execution_gateway")
 
@@ -225,6 +225,21 @@ class ExecutionGateway:
                     )
                     await self._send_alerts(request, result)
                     return result
+
+            # 4b. Check markets aren't closing soon (live mode only)
+            if request.mode in ("live", "dual"):
+                for leg in request.legs:
+                    market_open = await self._check_market_open(leg.ticker, min_seconds=60)
+                    if not market_open:
+                        result = self._create_failed_result(
+                            request, start_time, f"Market {leg.ticker} is closed or closing soon"
+                        )
+                        audit_id = await self._record_audit(request, result)
+                        result = ExecutionResult(
+                            **{**result.model_dump(), "audit_id": audit_id}
+                        )
+                        await self._send_alerts(request, result)
+                        return result
 
             # 5. Check risk limits for each leg
             if self.config.require_risk_check:
@@ -609,6 +624,53 @@ class ExecutionGateway:
                 # Don't fail on validation errors, proceed with execution
 
         return True
+
+    async def _check_market_open(self, ticker: str, min_seconds: int = 60) -> bool:
+        """
+        Check if market is open and not closing soon.
+
+        Args:
+            ticker: Market ticker to check
+            min_seconds: Minimum seconds until close required (default 60)
+
+        Returns:
+            True if market is open and not closing within min_seconds
+        """
+        if not self.kalshi_client:
+            return True  # Skip check in paper-only mode
+
+        try:
+            market = await self.kalshi_client.get_market(ticker)
+            if not market:
+                logger.warning(f"Market {ticker} not found")
+                return False
+
+            # Check market status
+            status = market.get("status", "").lower()
+            if status != "open":
+                logger.warning(f"Market {ticker} is not open (status: {status})")
+                return False
+
+            # Check close time
+            close_time_str = market.get("close_time") or market.get("expiration_time")
+            if close_time_str:
+                close_time = datetime.fromisoformat(close_time_str.replace("Z", "+00:00"))
+                now = datetime.now(timezone.utc)
+                seconds_until_close = (close_time - now).total_seconds()
+
+                if seconds_until_close < min_seconds:
+                    logger.warning(
+                        f"Market {ticker} closing too soon: {seconds_until_close:.0f}s "
+                        f"(min {min_seconds}s required)"
+                    )
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.warning(f"Market open check failed for {ticker}: {e}")
+            # Don't fail on check errors, proceed with execution
+            return True
 
     async def _execute_paper(self, request: ExecutionRequest) -> ExecutionResult:
         """

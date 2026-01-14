@@ -22,9 +22,9 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 │   :5173         │    │ :8001 (includes scanners)       │    │   Filter        │
 └─────────────────┘    └─────────────────────────────────┘    └─────────────────┘
         │                              │                              │
-        ├─ App.tsx                    ├─ main.py                    ├─ run_logs.py
-        ├─ Stores                     ├─ API Routes                 ├─ Log Viewer
-        ├─ Components                 ├─ Strategy Orchestrator      └─ Filtering
+        ├─ App.tsx                    ├─ main.py                    ├─ Integrated logs
+        ├─ Stores                     ├─ API Routes                 ├─ Log config
+        ├─ Components                 ├─ Strategy Orchestrator      └─ Log viewer
         └─ Services                   ├─ BTC/Weather Strategies
                                       ├─ Database
                                       └─ Utils (Auth)
@@ -59,7 +59,6 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | File | Command | When to use |
 |------|---------|-------------|
 | backend/main.py | `uvicorn backend.main:app --reload` | Start FastAPI backend server |
-| run_logs.py | `python run_logs.py` | View real-time colored logs with filtering |
 | test_core_components.py | `python test_core_components.py` | Test core trading infrastructure |
 | test_integration_startup.py | `python test_integration_startup.py` | Test complete application startup sequence |
 
@@ -72,9 +71,7 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | docker-compose.yml | Docker container configuration |
 | .claude/settings.local.json | Claude configuration settings |
 | backend/main.py | FastAPI app entry point |
-| backend/config.py | Legacy settings (replaced by config module) |
 | backend/config/__init__.py | Pydantic settings with location configs |
-| backend/config/fees.py | Kalshi fee calculation utilities |
 | backend/config/locations/__init__.py | Location module exports |
 | backend/config/locations/base.py | LocationConfig dataclass with forecast adjustments |
 | backend/config/locations/registry.py | Weather location definitions (7 cities) |
@@ -92,7 +89,6 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | backend/database/migrations/__init__.py | Database migrations module exports |
 | backend/database/migrations/001_execution_audit.py | Database migration for execution audit tables |
 | backend/database/schema.sql | Table definitions for paper trading |
-| backend/logging_config.py | Thread-safe logging with QueueHandler pattern |
 | backend/models/__init__.py | Models module exports |
 | backend/models/execution_models.py | Execution and trade-related data models |
 | backend/models/kalshi_models.py | Kalshi API data models with validation |
@@ -202,7 +198,6 @@ Comprehensive trading platform for Kalshi prediction markets with manual trading
 | frontend/src/types/index.ts | TypeScript interfaces |
 | frontend/src/types/weather.ts | Weather arbitrage type definitions |
 | frontend/src/utils/format.ts | Currency and time formatters |
-| run_logs.py | Standalone log viewer with filtering and color coding |
 | test_core_components.py | Core trading infrastructure component test suite |
 | diagnose_infrastructure.py | Comprehensive diagnostic tool for database schema, component imports, and system validation |
 | test1.py | Quick validation test suite for new trading infrastructure components |
