@@ -1,208 +1,260 @@
-# Kalshi Trading Platform
+# Kalshi Arbitrage Trading Platform - Index
 
-Comprehensive trading platform for Kalshi prediction markets with manual trading, portfolio management, and arbitrage detection. Supports dual-mode execution (paper simulation + live trading), watchlists, and position tracking across multiple market types.
+## Overview
+
+Automated prediction market arbitrage detection and execution on Kalshi with paper trading simulation. Features weather bracket arbitrage, BTC threshold/range arbitrage, and directional trading strategies.
+
+**Version**: 2.0 (Unified Trading Infrastructure)
+**Last Updated**: 2026-01-15
 
 ## Tech Stack
 
-- FastAPI (Python backend API)
-- React 18 + TypeScript (frontend)
-- Zustand (state management)
-- Tailwind CSS (styling)
-- SQLite + aiosqlite (database)
-- WebSockets (real-time updates)
-- Cryptography (Kalshi RSA-PSS authentication)
-- Vite (build tool)
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| Backend | FastAPI 0.109.0 | REST API server |
+| Frontend | React 18 + TypeScript | Web UI |
+| State | Zustand 4.x | Client state management |
+| Styling | Tailwind CSS 3.x | UI styling |
+| Database | SQLite + aiosqlite 0.19.0 | Local storage |
+| Auth | cryptography (RSA-PSS) | Kalshi API auth |
+| HTTP | httpx 0.26.0 | Async HTTP client |
+| Build | Vite 5.x | Frontend bundler |
 
-## Architecture
+## Architecture (4-Terminal)
 
 ```
-┌─────────────────┐    ┌─────────────────────────────────┐    ┌─────────────────┐
-│   Frontend      │    │         Backend                 │    │   Log Viewer    │
-│   React/TS      │◄──►│        FastAPI                  │◄──►│   Colored       │
-│   :5173         │    │ :8001 (includes scanners)       │    │   Filter        │
-└─────────────────┘    └─────────────────────────────────┘    └─────────────────┘
-        │                              │                              │
-        ├─ App.tsx                    ├─ main.py                    ├─ Integrated logs
-        ├─ Stores                     ├─ API Routes                 ├─ Log config
-        ├─ Components                 ├─ Strategy Orchestrator      └─ Log viewer
-        └─ Services                   ├─ BTC/Weather Strategies
-                                      ├─ Database
-                                      └─ Utils (Auth)
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Terminal 1    │    │   Terminal 2    │    │   Terminal 3    │    │   Terminal 4    │
+│   Frontend      │◄──►│   Backend API   │◄──►│   Scanners      │    │   Log Viewer    │
+│   React/Vite    │    │   FastAPI       │    │   BTC/Weather   │    │   Colored logs  │
+│   :5173         │    │   :8001         │    │   SQLite Write  │    │                 │
+└─────────────────┘    └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
-
-## Module Map
-
-| Module | Path | Purpose |
-|--------|------|---------|
-| backend/api | backend/api/ | HTTP routes and WebSocket handlers |
-| backend/database | backend/database/ | SQLite connection and schema |
-| backend/models | backend/models/ | Pydantic request/response schemas |
-| backend/services | backend/services/ | Core business logic and external integrations |
-| backend/services/core | backend/services/core/ | Unified trading infrastructure (orchestrator, signals, risk, etc.) |
-| backend/services/analysis | backend/services/analysis/ | Analysis tools and probability calculators |
-| backend/services/nws | backend/services/nws/ | National Weather Service API client and configuration |
-| backend/services/websocket | backend/services/websocket/ | WebSocket data synchronization |
-| backend/services/reconciliation | backend/services/reconciliation/ | Position and balance reconciliation between local and Kalshi |
-| backend/services/strategies | backend/services/strategies/ | BaseStrategy implementations for weather and BTC trading |
-| backend/tests | backend/tests/ | Unit and integration test suites |
-| backend/utils | backend/utils/ | Kalshi RSA-PSS authentication |
-| backend/config | backend/config/ | Settings and location configurations |
-| frontend/components/arbitrage | frontend/src/components/arbitrage/ | Limited arbitrage components (hooks and exports) |
-| frontend/hooks | frontend/src/hooks/ | Custom React hooks |
-| frontend/services | frontend/src/services/ | Backend API client |
-| frontend/stores | frontend/src/stores/ | Zustand state management |
-| frontend/types | frontend/src/types/ | TypeScript type definitions |
-| frontend/utils | frontend/src/utils/ | Formatting utilities |
 
 ## Entry Points
 
-| File | Command | When to use |
-|------|---------|-------------|
-| backend/main.py | `uvicorn backend.main:app --reload` | Start FastAPI backend server |
-| test_core_components.py | `python test_core_components.py` | Test core trading infrastructure |
-| test_integration_startup.py | `python test_integration_startup.py` | Test complete application startup sequence |
+| File | Command | Purpose |
+|------|---------|---------|
+| `backend/main.py` | `uvicorn backend.main:app --reload --port 8001` | Start API server |
+| `frontend/` | `npm run dev` (in frontend/) | Start React dev server |
+| `run_scanners.py` | `python run_scanners.py` | Run BTC + Weather scanners |
+| `run_logs.py` | `python run_logs.py` | Start log viewer |
+| `start.bat` | `start.bat` | Launch all 4 terminals |
+| `test_core_components.py` | `python test_core_components.py` | Test core infrastructure |
 
-## File Tree
+## Module Map
 
-| File | Description |
-|------|-------------|
-| README.md | Project documentation and setup |
-| PROMPT.md | Project prompt and context documentation |
-| docker-compose.yml | Docker container configuration |
-| .claude/settings.local.json | Claude configuration settings |
-| backend/main.py | FastAPI app entry point |
-| backend/config/__init__.py | Pydantic settings with location configs |
-| backend/config/locations/__init__.py | Location module exports |
-| backend/config/locations/base.py | LocationConfig dataclass with forecast adjustments |
-| backend/config/locations/registry.py | Weather location definitions (7 cities) |
-| start.bat | Windows batch 4-terminal launcher script |
-| stop.bat | Stop all Kalshi platform services |
-| test_core_components.py | Core trading infrastructure component test suite |
-| backend/api/__init__.py | API module exports |
-| backend/api/prediction_routes.py | Weather prediction and forecast API endpoints |
-| backend/api/routes.py | REST API endpoint handlers |
-| backend/api/schemas.py | API request/response schemas |
-| backend/api/websocket.py | WebSocket connection manager |
-| backend/api/websocket_routes.py | WebSocket route handlers |
-| backend/database/__init__.py | Database module exports |
-| backend/database/connection.py | SQLite async connection manager |
-| backend/database/migrations/__init__.py | Database migrations module exports |
-| backend/database/migrations/001_execution_audit.py | Database migration for execution audit tables |
-| backend/database/schema.sql | Table definitions for paper trading |
-| backend/models/__init__.py | Models module exports |
-| backend/models/execution_models.py | Execution and trade-related data models |
-| backend/models/kalshi_models.py | Kalshi API data models with validation |
-| backend/models/nws_models.py | Weather forecast and location models |
-| backend/models/schemas.py | Pydantic request models |
-| backend/models/types.py | TypedDict and Enum definitions |
-| backend/services/__init__.py | Services module exports all classes |
-| backend/services/arbitrage_calculator.py | Three-strategy arbitrage calculator for mutually exclusive brackets |
-| backend/services/arbitrage_detector.py | Finds profitable arbitrage opportunities |
-| backend/services/kalshi_client.py | Kalshi REST API client |
-| backend/services/market_classifier.py | Classifies markets as threshold/bracket |
-| backend/services/paper_trading.py | Simulated paper trading service |
-| backend/services/portfolio_service.py | Portfolio summary and position aggregation |
-| backend/services/spot_price_client.py | Free API BTC price client (CoinGecko/CoinLore) |
-| backend/services/trade_executor.py | Routes trades to paper or live |
-| backend/services/watchlist_service.py | Saved markets management service |
-| backend/services/btc_arb_scanner.py | BTC arbitrage opportunity detection scanner |
-| backend/services/log_config.py | Centralized logging with colored output |
-| backend/services/log_viewer.py | Real-time log viewer with filtering |
-| backend/services/nws_client.py | National Weather Service API client |
-| backend/services/nws/__init__.py | NWS module exports |
-| backend/services/nws/client.py | Production NWS client with Open-Meteo fallback |
-| backend/services/nws/config.py | NWS grid points and cache configuration |
-| backend/services/scanner_db.py | SQLite database for scanner results |
-| backend/services/weather_arb_scanner.py | Weather arbitrage scanner for 14 series |
-| backend/services/core/__init__.py | Core module exports all trading infrastructure |
-| backend/services/core/base_strategy.py | BaseStrategy ABC and TradingSignal dataclass |
-| backend/services/core/signal_manager.py | Signal lifecycle management and database storage |
-| backend/services/core/kelly_sizing.py | Kelly Criterion position sizing calculator |
-| backend/services/core/risk_manager.py | Position limits and loss tracking |
-| backend/services/core/circuit_breaker.py | Emergency halt on consecutive losses |
-| backend/services/core/batch_executor.py | Atomic multi-leg order execution |
-| backend/services/core/execution_gateway.py | Single entry point for all trade execution with risk checks |
-| backend/services/core/fee_calculator.py | Consolidated fee calculation service |
-| backend/services/core/performance_tracker.py | P&L tracking and metrics calculation |
-| backend/services/core/position_manager.py | Unified position tracking across paper/live modes |
-| backend/services/core/alert_service.py | Real-time alerts via WebSocket |
-| backend/services/core/strategy_orchestrator.py | Main trading engine coordinating all strategies |
-| backend/services/core/backtest_engine.py | Historical strategy backtesting engine |
-| backend/services/analysis/__init__.py | Analysis module exports |
-| backend/services/analysis/arbitrage_calculator.py | Enhanced arbitrage calculator with fee handling |
-| backend/services/analysis/position_calculator.py | Position sizing and portfolio calculations |
-| backend/services/analysis/prediction_engine_v2.py | Enhanced prediction engine with fee-aware calculations |
-| backend/services/analysis/probability_engine.py | Weather probability modeling engine |
-| backend/services/websocket/__init__.py | WebSocket module exports |
-| backend/services/websocket/data_sync.py | Real-time data synchronization |
-| backend/services/websocket/manager.py | WebSocket connection management |
-| backend/services/websocket/orderbook_builder.py | Live orderbook construction |
-| backend/services/reconciliation/__init__.py | Reconciliation module exports |
-| backend/services/reconciliation/reconciler.py | Position and balance reconciliation service |
-| backend/services/strategies/__init__.py | Strategy module exports with registry |
-| backend/services/strategies/btc_arb_strategy.py | BTC range vs threshold arbitrage strategy |
-| backend/services/strategies/btc_directional_strategy.py | BTC directional strategy using logistic probability |
-| backend/services/strategies/weather_strategy.py | Weather bracket arbitrage and directional strategy |
-| backend/tests/__init__.py | Test module exports |
-| backend/tests/test_analysis.py | Analysis component unit tests |
-| backend/tests/test_integration.py | Integration test suite |
-| backend/tests/test_models.py | Data model unit tests |
-| backend/tests/test_prediction_engine.py | Prediction engine v2 test suite |
-| backend/tests/test_websocket.py | WebSocket functionality tests |
-| backend/utils/__init__.py | Utils module exports |
-| backend/utils/kalshi_auth.py | RSA-PSS signature authentication |
-| backend/utils/logger.py | Logging system with activity buffer |
-| bug_hunt/CHANGES_SUMMARY.md | Comprehensive bug fix summary with validation results and change documentation |
-| bug_hunt/pre_analysis.py | Pre-analysis diagnostic script for bug hunting and code quality assessment |
-| frontend/postcss.config.js | PostCSS config for Tailwind |
-| frontend/tailwind.config.js | Tailwind CSS configuration |
-| frontend/vite.config.ts | Vite bundler configuration |
-| frontend/src/App.tsx | Main React application component |
-| frontend/src/main.tsx | React application entry point |
-| frontend/src/vite-env.d.ts | Vite type definitions |
-| frontend/src/components/arbitrage/ArbitrageAnalysisBox.tsx | Three-strategy arbitrage analysis display component |
-| frontend/src/components/arbitrage/ArbitrageHub.tsx | Main arbitrage detection and execution interface |
-| frontend/src/components/arbitrage/CryptoArbitrageSection.tsx | Crypto arbitrage scanner with card-based UI |
-| frontend/src/components/arbitrage/ExecutionPanel.tsx | Trade execution panel with order management |
-| frontend/src/components/arbitrage/OrderBook.tsx | Real-time order book display component |
-| frontend/src/components/arbitrage/PredictionPanel.tsx | Weather prediction analysis panel |
-| frontend/src/components/arbitrage/PredictionTab.tsx | Weather prediction tab interface |
-| frontend/src/components/arbitrage/RiskDashboard.tsx | Risk monitoring and circuit breaker dashboard |
-| frontend/src/components/arbitrage/WeatherArbitrageSection.tsx | Weather arbitrage scanner with forecast highlighting |
-| frontend/src/components/arbitrage/hooks/useArbitrage.ts | Arbitrage data fetching and state management |
-| frontend/src/components/arbitrage/index.ts | Arbitrage component exports |
-| frontend/src/components/arbitrage/shared/ConfigPanel.tsx | Reusable configuration controls component |
-| frontend/src/components/arbitrage/shared/OpportunityTable.tsx | Reusable opportunity table component |
-| frontend/src/components/arbitrage/shared/StatsBar.tsx | Reusable statistics display component |
-| frontend/src/components/autotrader/AutoTraderTab.tsx | Automated trading configuration and monitoring |
-| frontend/src/components/common/Modal.tsx | Reusable modal dialog component |
-| frontend/src/components/layout/Header.tsx | Application header with live spot price indicator |
-| frontend/src/components/layout/TabNav.tsx | Tab navigation for main sections |
-| frontend/src/components/trade/TradeCard.tsx | Manual trading market card interface |
-| frontend/src/components/trade/TradeTab.tsx | Manual trading tab wrapper |
-| frontend/src/components/btcarb/BTCArbitrageTab.tsx | BTC-specific arbitrage scanning interface |
-| frontend/src/components/portfolio/PortfolioTab.tsx | Portfolio overview and position tracking |
-| frontend/src/components/trading/TradingTab.tsx | Manual trading interface |
-| frontend/src/components/analytics/AnalyticsTab.tsx | Analytics dashboard for performance metrics |
-| frontend/src/components/opportunities/ExecuteModal.tsx | Modal dialog for executing trading opportunities |
-| frontend/src/components/opportunities/OpportunitiesTab.tsx | Tab for viewing and managing opportunities |
-| frontend/src/components/opportunities/OpportunityCard.tsx | Card component for individual opportunities |
-| frontend/src/components/trading/ModeBanner.tsx | Banner indicating current trading mode |
-| frontend/src/components/trading/ModeToggle.tsx | Toggle component for switching trading modes |
-| frontend/src/components/trading/PositionList.tsx | List component for displaying positions |
-| frontend/src/components/trading/TradeHistory.tsx | Component for viewing trade history |
-| frontend/src/components/watchlist/WatchlistTab.tsx | Tab for managing market watchlists |
-| frontend/src/hooks/usePredictions.ts | Weather prediction data fetching hook |
-| frontend/src/hooks/useSpotPrice.ts | Live BTC price polling hook |
-| frontend/src/services/api.ts | Backend HTTP API client |
-| frontend/src/stores/opportunityStore.ts | Opportunities Zustand store |
-| frontend/src/stores/tradingStore.ts | Trading state Zustand store |
-| frontend/src/types/index.ts | TypeScript interfaces |
-| frontend/src/types/weather.ts | Weather arbitrage type definitions |
-| frontend/src/utils/format.ts | Currency and time formatters |
-| test_core_components.py | Core trading infrastructure component test suite |
-| diagnose_infrastructure.py | Comprehensive diagnostic tool for database schema, component imports, and system validation |
-| test1.py | Quick validation test suite for new trading infrastructure components |
-| test_integration_startup.py | Integration test suite verifying startup sequence |
-| test_results.json | Test execution results in JSON format for automated processing |
-| DIAGNOSTIC_SUMMARY.md | Infrastructure diagnostic status report with component and database validation results |
+### Backend Core
+
+| Module | Path | Purpose | Status |
+|--------|------|---------|--------|
+| API Routes | `backend/api/routes.py` | REST endpoints (72 endpoints) | Working |
+| Prediction Routes | `backend/api/prediction_routes.py` | Weather prediction API | Working |
+| WebSocket | `backend/api/websocket_routes.py` | Real-time updates | Working |
+| Main Entry | `backend/main.py` | FastAPI app initialization | Working |
+
+### Services - Core Trading Infrastructure
+
+| Module | Path | Purpose | Status |
+|--------|------|---------|--------|
+| Strategy Orchestrator | `backend/services/core/strategy_orchestrator.py` | Main trading engine | Working |
+| Execution Gateway | `backend/services/core/execution_gateway.py` | Single entry point for trades | **BUG: Cache invalidation** |
+| Batch Executor | `backend/services/core/batch_executor.py` | Multi-leg atomic execution | **BUG: No rollback** |
+| Signal Manager | `backend/services/core/signal_manager.py` | Signal lifecycle | Working |
+| Position Manager | `backend/services/core/position_manager.py` | Position tracking | Working |
+| Risk Manager | `backend/services/core/risk_manager.py` | Position limits | Working |
+| Circuit Breaker | `backend/services/core/circuit_breaker.py` | Emergency halt | Working |
+| Fee Calculator | `backend/services/core/fee_calculator.py` | Fee calculations | Working |
+| Kelly Sizing | `backend/services/core/kelly_sizing.py` | Position sizing | Working |
+| Performance Tracker | `backend/services/core/performance_tracker.py` | P&L metrics | Working |
+| Alert Service | `backend/services/core/alert_service.py` | Real-time alerts | Working |
+| Backtest Engine | `backend/services/core/backtest_engine.py` | Historical testing | Untested |
+
+### Services - Strategies
+
+| Module | Path | Purpose | Status |
+|--------|------|---------|--------|
+| Base Strategy | `backend/services/core/base_strategy.py` | Strategy ABC | Working |
+| Weather Strategy | `backend/services/strategies/weather_strategy.py` | Weather bracket arb | **BUG: Fee not integrated** |
+| BTC Arb Strategy | `backend/services/strategies/btc_arb_strategy.py` | BTC range/threshold | Working |
+| BTC Directional | `backend/services/strategies/btc_directional_strategy.py` | BTC directional | Working |
+
+### Services - Analysis
+
+| Module | Path | Purpose | Status |
+|--------|------|---------|--------|
+| Arbitrage Calculator | `backend/services/analysis/arbitrage_calculator.py` | Enhanced arb detection | Working |
+| Probability Engine | `backend/services/analysis/probability_engine.py` | Weather probability | Working |
+| Prediction Engine V2 | `backend/services/analysis/prediction_engine_v2.py` | Fee-aware predictions | Working |
+| Position Calculator | `backend/services/analysis/position_calculator.py` | Portfolio calcs | Working |
+
+### Services - External Clients
+
+| Module | Path | Purpose | Status |
+|--------|------|---------|--------|
+| Kalshi Client | `backend/services/kalshi_client.py` | Kalshi REST API | Working |
+| NWS Client | `backend/services/nws/client.py` | Weather forecasts | Working |
+| Spot Price Client | `backend/services/spot_price_client.py` | BTC price (free APIs) | Working |
+
+### Services - Scanners
+
+| Module | Path | Purpose | Status |
+|--------|------|---------|--------|
+| BTC Arb Scanner | `backend/services/btc_arb_scanner.py` | 2-second interval | Working |
+| Weather Arb Scanner | `backend/services/weather_arb_scanner.py` | 30-second interval | Working |
+| Scanner DB | `backend/services/scanner_db.py` | Scanner result storage | Working |
+
+### Services - Support
+
+| Module | Path | Purpose | Status |
+|--------|------|---------|--------|
+| Paper Trading | `backend/services/paper_trading.py` | Simulation engine | Working |
+| Trade Executor | `backend/services/trade_executor.py` | Paper/live router | Working |
+| Portfolio Service | `backend/services/portfolio_service.py` | Portfolio summary | Working |
+| Watchlist Service | `backend/services/watchlist_service.py` | Saved markets | Working |
+| Reconciliation | `backend/services/reconciliation/reconciler.py` | Position sync | Untested |
+
+### Data Models
+
+| Module | Path | Purpose | Status |
+|--------|------|---------|--------|
+| Kalshi Models | `backend/models/kalshi_models.py` | API data models | **BUG: bracket_label()** |
+| NWS Models | `backend/models/nws_models.py` | Weather models | Working |
+| Execution Models | `backend/models/execution_models.py` | Trade models | Working |
+| Types | `backend/models/types.py` | Enums, TypedDicts | Working |
+
+### Frontend Components
+
+| Module | Path | Purpose |
+|--------|------|---------|
+| ArbitrageHub | `frontend/src/components/arbitrage/ArbitrageHub.tsx` | Main arbitrage UI |
+| WeatherArbitrageSection | `frontend/src/components/arbitrage/WeatherArbitrageSection.tsx` | Weather scanner |
+| CryptoArbitrageSection | `frontend/src/components/arbitrage/CryptoArbitrageSection.tsx` | BTC scanner |
+| ExecutionPanel | `frontend/src/components/arbitrage/ExecutionPanel.tsx` | Trade execution |
+| RiskDashboard | `frontend/src/components/arbitrage/RiskDashboard.tsx` | Risk monitoring |
+| PortfolioTab | `frontend/src/components/portfolio/PortfolioTab.tsx` | Positions |
+| AutoTraderTab | `frontend/src/components/autotrader/AutoTraderTab.tsx` | Auto-trading |
+
+## File Tree (Condensed)
+
+```
+kalshi-bc-arb/
+├── backend/
+│   ├── main.py                          # FastAPI entry (331 lines)
+│   ├── api/
+│   │   ├── routes.py                    # REST endpoints (1,747 lines)
+│   │   ├── prediction_routes.py         # Weather predictions (545 lines)
+│   │   ├── websocket_routes.py          # WebSocket handlers (318 lines)
+│   │   └── schemas.py                   # API schemas (284 lines)
+│   ├── models/
+│   │   ├── kalshi_models.py             # Kalshi data models (456 lines)
+│   │   ├── nws_models.py                # Weather models (281 lines)
+│   │   ├── execution_models.py          # Trade models (136 lines)
+│   │   └── types.py                     # Enums/TypedDicts (141 lines)
+│   ├── services/
+│   │   ├── core/                        # Trading infrastructure (14 files, ~6,500 lines)
+│   │   │   ├── strategy_orchestrator.py # Main engine (626 lines)
+│   │   │   ├── execution_gateway.py     # Trade entry point (1,208 lines)
+│   │   │   ├── position_manager.py      # Position tracking (597 lines)
+│   │   │   ├── fee_calculator.py        # Fee calcs (602 lines)
+│   │   │   ├── batch_executor.py        # Multi-leg exec (421 lines)
+│   │   │   ├── risk_manager.py          # Risk limits (330 lines)
+│   │   │   ├── circuit_breaker.py       # Emergency halt (303 lines)
+│   │   │   ├── signal_manager.py        # Signal lifecycle (374 lines)
+│   │   │   ├── kelly_sizing.py          # Position sizing (248 lines)
+│   │   │   ├── performance_tracker.py   # P&L metrics (454 lines)
+│   │   │   ├── alert_service.py         # Alerts (350 lines)
+│   │   │   ├── backtest_engine.py       # Backtesting (511 lines)
+│   │   │   └── base_strategy.py         # Strategy ABC (285 lines)
+│   │   ├── strategies/                  # Strategy implementations
+│   │   │   ├── weather_strategy.py      # Weather arb (631 lines)
+│   │   │   ├── btc_arb_strategy.py      # BTC arb (267 lines)
+│   │   │   └── btc_directional_strategy.py # BTC directional (490 lines)
+│   │   ├── analysis/                    # Analysis engines
+│   │   │   ├── arbitrage_calculator.py  # Arb detection (630 lines)
+│   │   │   ├── probability_engine.py    # Weather prob (402 lines)
+│   │   │   ├── prediction_engine_v2.py  # Fee-aware (560 lines)
+│   │   │   └── position_calculator.py   # Portfolio (358 lines)
+│   │   ├── nws/                         # Weather service
+│   │   │   ├── client.py                # NWS client
+│   │   │   └── config.py                # Grid points
+│   │   ├── websocket/                   # Real-time data
+│   │   │   ├── manager.py               # WS management
+│   │   │   ├── data_sync.py             # Data sync
+│   │   │   └── orderbook_builder.py     # Orderbook
+│   │   ├── reconciliation/
+│   │   │   └── reconciler.py            # Position sync
+│   │   ├── kalshi_client.py             # Kalshi API (302 lines)
+│   │   ├── paper_trading.py             # Simulation (305 lines)
+│   │   ├── btc_arb_scanner.py           # BTC scanner (719 lines)
+│   │   ├── weather_arb_scanner.py       # Weather scanner (381 lines)
+│   │   └── ...
+│   ├── database/
+│   │   ├── connection.py                # SQLite manager
+│   │   └── schema.sql                   # Table defs
+│   ├── config/
+│   │   ├── __init__.py                  # Settings
+│   │   └── locations/                   # Weather configs
+│   └── utils/
+│       └── kalshi_auth.py               # RSA-PSS auth
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx                      # Root component
+│   │   ├── components/
+│   │   │   ├── arbitrage/               # Arbitrage UI (11 files)
+│   │   │   ├── portfolio/               # Portfolio
+│   │   │   ├── trading/                 # Trading UI
+│   │   │   └── ...
+│   │   ├── stores/                      # Zustand stores
+│   │   ├── hooks/                       # React hooks
+│   │   └── services/api.ts              # Backend client
+│   └── vite.config.ts
+├── context/                             # Documentation
+│   ├── INDEX.md                         # This file
+│   ├── API.md                           # API reference
+│   └── SCHEMAS.md                       # Data schemas
+├── .claude/CLAUDE.md                    # AI assistant context
+├── start.bat                            # Launch all services
+└── test_core_components.py              # Core tests
+```
+
+## Key Statistics
+
+| Metric | Count |
+|--------|-------|
+| Python Files (backend) | 78 |
+| TypeScript/React Files | 43 |
+| Python Lines | ~77,500 |
+| React/TS Lines | ~6,139 |
+| REST Endpoints | 72 |
+| Core Infrastructure Files | 14 |
+| Strategy Implementations | 3 |
+
+## Known Issues
+
+| Issue | Location | Impact | Priority |
+|-------|----------|--------|----------|
+| Fee not integrated in edge calc | `weather_strategy.py:333-338` | Shows inflated edge (2.04% vs actual -6.54%) | CRITICAL |
+| No partial fill rollback | `batch_executor.py:255-290` | Unhedged positions on partial fills | CRITICAL |
+| Cache stale on partial fills | `execution_gateway.py:294-297` | 30s stale data after partial fills | HIGH |
+| Bracket label off-by-1 | `kalshi_models.py:265-273` | Wrong display for open-ended brackets | MEDIUM |
+
+## Dependencies
+
+### Critical Path
+```
+StrategyOrchestrator
+  → WeatherStrategy/BTCStrategy
+    → ExecutionGateway
+      → BatchExecutor
+        → KalshiClient (live) / PaperTrading (paper)
+          → PositionManager
+            → RiskManager + CircuitBreaker
+```
+
+### Fee Integration Path (BROKEN)
+```
+WeatherStrategy._check_bracket_arbitrage()
+  ✗ MISSING: FeeCalculator.calculate_multi_leg()
+  → TradingSignal with inflated edge_percent
+```

@@ -1,0 +1,329 @@
+{
+  "timestamp": "2026-01-14T20:34:10.200657",
+  "questions_answered": {
+    "q13_scanner_runtime": {
+      "answer": "NO DATA - execution_audit table is empty",
+      "evidence": [
+        "Total executions: 0",
+        "Gaps > 10 min: 0",
+        "Unique error types: 0"
+      ],
+      "total_executions": 0,
+      "gap_analysis": [],
+      "error_patterns": [],
+      "sources_found": []
+    },
+    "q14_false_positives": {
+      "answer": "No false positives found in paper_trades",
+      "count": 0,
+      "examples": [],
+      "total_loss_cents": 0,
+      "evidence": [
+        "False positive count: 0",
+        "Total loss: $0.00"
+      ]
+    },
+    "q15_slippage": {
+      "answer": "Mean slippage: 0\u00a2, P95: 0\u00a2, Rejection rate: 0%",
+      "mean": 0,
+      "median": 0,
+      "max": 0,
+      "p95": 0,
+      "rejection_rate": "0%",
+      "evidence": [
+        "Analyzed 0 leg results from 0 trades",
+        "Rejections due to slippage: 0"
+      ],
+      "distribution": {}
+    }
+  },
+  "issues_validated": {
+    "fee_integration_bug": {
+      "confirmed": true,
+      "evidence": "WeatherStrategy reports 2.04% edge but actual is -6.54% (inflated by 8.58%). Trade appears profitable ($0.02) but after $0.09 fees, actual profit is $-0.07",
+      "demonstration": {
+        "scenario": "6-bracket weather arbitrage",
+        "bracket_prices_cents": [
+          30,
+          25,
+          20,
+          15,
+          5,
+          3
+        ],
+        "gross_cost_cents": 98,
+        "gross_edge_cents": 2,
+        "gross_edge_percent": 2.04,
+        "fees_breakdown": [
+          {
+            "price": 30,
+            "fee": 2
+          },
+          {
+            "price": 25,
+            "fee": 2
+          },
+          {
+            "price": 20,
+            "fee": 2
+          },
+          {
+            "price": 15,
+            "fee": 1
+          },
+          {
+            "price": 5,
+            "fee": 1
+          },
+          {
+            "price": 3,
+            "fee": 1
+          }
+        ],
+        "total_fees_cents": 9,
+        "net_cost_cents": 107,
+        "net_profit_cents": -7,
+        "net_edge_percent": -6.54,
+        "weather_strategy_reports": "2.04% edge",
+        "actual_edge": "-6.54% edge",
+        "difference": "8.58% INFLATED",
+        "would_pass_3pct_threshold": false,
+        "should_pass_3pct_threshold": false,
+        "is_actually_profitable": false,
+        "edge_case": {
+          "scenario": "Marginal 2% gross edge",
+          "brackets": [
+            18,
+            18,
+            18,
+            18,
+            18,
+            8
+          ],
+          "gross_edge_percent": 2.04,
+          "fees_cents": 11,
+          "net_profit_cents": -9,
+          "would_execute": true,
+          "actually_profitable": false
+        }
+      },
+      "code_location": "backend/services/strategies/weather_strategy.py:333-338"
+    },
+    "bracket_label_bug": {
+      "confirmed": null,
+      "evidence": "Code shows cap_strike used directly without adjustment. Need to compare with actual market titles to confirm if -1 adjustment needed.",
+      "code_location": "backend/models/kalshi_models.py:265-273",
+      "needs_api_call": true,
+      "code_analysis": {
+        "implementation": "\ndef bracket_label(self) -> str:\n    if self.floor_strike is not None and self.cap_strike is not None:\n        return f\"{self.floor_strike}-{self.cap_strike}F\"\n    elif self.floor_strike is not None:\n        return f\">={self.floor_strike}F\"\n    elif self.cap_strike is not None:\n        return f\"<{self.cap_strike}F\"\n    return self.title\n",
+        "potential_issue": "cap_strike may be exclusive (e.g., 62 means <62, not <=62)",
+        "impact": "Labels like '60-62F' might actually mean '60-61F' if cap is exclusive",
+        "verification_needed": "Compare bracket_label output to actual Kalshi market titles",
+        "cache_error": "no such table: markets"
+      }
+    },
+    "partial_fill_gap": {
+      "confirmed": true,
+      "evidence": "CONFIRMED: No rollback, unwind, or recovery logic found in execution code. Searched batch_executor.py, execution_gateway.py, and position_manager.py for: rollback, unwind, revert, cancel.*partial, close.*position.*fail, offsetting, hedge.*fail, recovery.*trade. Zero matches found.",
+      "code_locations": [],
+      "search_results": {
+        "partial_fill_handling": {
+          "file": "batch_executor.py",
+          "line": 35,
+          "context": "PARTIAL = \"partial\""
+        }
+      },
+      "risk_assessment": {
+        "risk_level": "HIGH",
+        "scenario": "Partial fill on atomic order leaves unhedged positions",
+        "impact": "Manual intervention required to close positions",
+        "mitigation": "None currently implemented"
+      }
+    },
+    "cache_invalidation": {
+      "confirmed": true,
+      "evidence": "Cache invalidation at line 294-297 is conditional on result.success. Partial fills set success=False, so cache remains stale until TTL (30s) expires.",
+      "code_location": "backend/services/core/execution_gateway.py:294-297",
+      "code_snippet": "            audit_id = await self._record_audit(request, result)\n            result = ExecutionResult(**{**result.model_dump(), \"audit_id\": audit_id})\n\n            # 8. Invalidate position cache after successful execution\n            if result.success and self.position_manager:\n                self.position_manager.invalidate_cache()\n                logger.debug(\"Position cache invalidated after successful execution\")\n\n            # 9. Update circuit breaker\n            await self._update_circuit_breaker(result)",
+      "impact_analysis": {
+        "scenario": "Partial fill with atomic=True",
+        "behavior": "result.success = False, cache NOT invalidated",
+        "consequence": "Stale position data for up to 30 seconds (default TTL)",
+        "risk": "Subsequent trades may use incorrect position data",
+        "affected_operations": [
+          "Position limit checks",
+          "Kelly sizing calculations",
+          "Risk exposure calculations"
+        ]
+      }
+    }
+  },
+  "system_health": {
+    "database": {
+      "status": "OK",
+      "issues": [],
+      "tables": {
+        "paper_account": 1,
+        "paper_positions": 0,
+        "paper_trades": 0,
+        "opportunity_history": 0,
+        "manual_orders": 0,
+        "watchlist": 0,
+        "trading_signals": 0,
+        "sqlite_sequence": 0,
+        "auto_trader_config": 1,
+        "daily_pnl": 0,
+        "btc_arb_executions": 0,
+        "btc_arb_config": 1,
+        "signals_v2": 0,
+        "trade_records": 0,
+        "orchestrator_config": 1,
+        "circuit_breaker_state": 1,
+        "risk_positions": 0,
+        "daily_pnl_v2": 0,
+        "historical_opportunities": 0,
+        "alert_history": 0,
+        "execution_audit": 0
+      },
+      "orphaned_records": []
+    },
+    "configurations": {
+      "orchestrator_config": {
+        "id": 1,
+        "auto_trade_enabled": 0,
+        "mode": "paper",
+        "kelly_fraction": 0.25,
+        "min_edge_percent": 5.0,
+        "max_position_per_market": 100,
+        "max_daily_loss_cents": 5000,
+        "cb_max_consecutive_losses": 5,
+        "updated_at": "2026-01-11 04:35:25"
+      },
+      "btc_arb_config": {
+        "id": 1,
+        "min_edge_percent": 3.0,
+        "default_budget_cents": 10000,
+        "auto_trade_enabled": 0,
+        "scan_interval_seconds": 2.0,
+        "max_position_per_opp_cents": 50000,
+        "mode": "paper",
+        "updated_at": "2026-01-11 04:35:25"
+      },
+      "auto_trader_config": {
+        "id": 1,
+        "enabled": 0,
+        "min_edge_percent": 10.0,
+        "max_position_size": 100,
+        "max_daily_loss_cents": 10000,
+        "max_open_positions": 10,
+        "allowed_series": "KXBTC,KXBTCD",
+        "updated_at": "2026-01-11 04:35:25"
+      },
+      "circuit_breaker_state": {
+        "id": 1,
+        "tripped": 0,
+        "trip_reason": null,
+        "trip_time": null,
+        "permanent": 0,
+        "consecutive_losses": 0,
+        "daily_loss_cents": 0,
+        "hourly_trades_json": null,
+        "hourly_exposure_json": null,
+        "last_reset_date": null,
+        "updated_at": "2026-01-11 04:35:25"
+      }
+    },
+    "nws_client": {
+      "status": "CLIENT_AVAILABLE",
+      "reason": "NWSClient class can be imported",
+      "cities_to_test": [
+        "New York, NY",
+        "Chicago, IL",
+        "Miami, FL",
+        "Denver, CO",
+        "Phoenix, AZ",
+        "Seattle, WA",
+        "Atlanta, GA"
+      ],
+      "circuit_states": {},
+      "cache_stats": {}
+    },
+    "fee_calculator": {
+      "status": "OK",
+      "test_cases": [
+        {
+          "contracts": 10,
+          "price_cents": 50,
+          "expected_fee": 18,
+          "calculated_fee": 18,
+          "passed": true,
+          "formula_raw": 17.5,
+          "fee_calculator_result": 18
+        },
+        {
+          "contracts": 100,
+          "price_cents": 25,
+          "expected_fee": 132,
+          "calculated_fee": 132,
+          "passed": true,
+          "formula_raw": 131.25,
+          "fee_calculator_result": 132
+        },
+        {
+          "contracts": 1,
+          "price_cents": 99,
+          "expected_fee": 1,
+          "calculated_fee": 1,
+          "passed": true,
+          "formula_raw": 0.0693,
+          "fee_calculator_result": 1
+        },
+        {
+          "contracts": 10,
+          "price_cents": 60,
+          "expected_fee": 17,
+          "calculated_fee": 17,
+          "passed": true,
+          "formula_raw": 16.8,
+          "fee_calculator_result": 17
+        },
+        {
+          "contracts": 10,
+          "price_cents": 30,
+          "expected_fee": 15,
+          "calculated_fee": 15,
+          "passed": true,
+          "formula_raw": 14.7,
+          "fee_calculator_result": 15
+        }
+      ],
+      "all_passed": true
+    }
+  },
+  "recommended_fixes": [
+    {
+      "priority": "CRITICAL",
+      "issue": "Fee Integration Bug in WeatherStrategy",
+      "file": "backend/services/strategies/weather_strategy.py",
+      "lines": "333-473",
+      "fix": "Replace manual edge calculation with FeeCalculator.analyze_weather_arbitrage() call. Store net_cost and fees in signal metadata.",
+      "impact": "False positive trades causing real losses"
+    },
+    {
+      "priority": "CRITICAL",
+      "issue": "No Rollback for Partial Fills",
+      "file": "backend/services/core/batch_executor.py",
+      "lines": "255-290",
+      "fix": "Implement rollback handler that sells back partial fills when atomic execution fails. Add watchdog timer for stuck orders.",
+      "impact": "Unhedged positions on failed atomic trades"
+    },
+    {
+      "priority": "HIGH",
+      "issue": "Cache Not Invalidated on Partial Fill",
+      "file": "backend/services/core/execution_gateway.py",
+      "lines": "294-297",
+      "fix": "Invalidate cache on ANY execution attempt, not just successful ones. Add force_refresh parameter to position queries after trade attempts.",
+      "impact": "Stale position data for subsequent trades"
+    }
+  ]
+}
