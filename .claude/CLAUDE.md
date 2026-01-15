@@ -1,276 +1,305 @@
-# CLAUDE.md - Kalshi Arbitrage Trading Platform
+# CLAUDE.md - Kalshi Arbitrage Platform
 
-> **Quick Reference for AI Assistants**
-> This document provides comprehensive context for working on the Kalshi prediction market arbitrage trading platform.
-
----
-
-## 📋 Table of Contents
-
-- [Project Overview](#project-overview)
-- [⚠️ Critical Constraints](#critical-constraints)
-- [Architecture](#architecture)
-- [API Reference](#api-reference)
-- [Trading Strategies](#trading-strategies)
-- [Data Models](#data-models)
-- [Code Patterns](#code-patterns)
-- [File Structure](#file-structure)
-- [Environment Variables](#environment-variables)
-- [Quick Commands](#quick-commands)
-- [Testing Strategy](#testing-strategy)
+> AI Assistant Reference for the Kalshi prediction market arbitrage trading platform.
 
 ---
 
-## Project Overview
+## 1. Project Overview
 
-**Purpose**: Automated prediction market arbitrage detection and execution on Kalshi with paper trading simulation.
+**Purpose**: Automated prediction market arbitrage detection and execution on Kalshi.
 
 ### Tech Stack
 
-| Component | Technology | Version | Purpose |
-|-----------|------------|---------|---------|
-| Backend | FastAPI | 0.109.0 | REST API server |
-| Frontend | React + TypeScript | 18.x | Web UI |
-| State Management | Zustand | 4.x | Client state |
-| Styling | Tailwind CSS | 3.x | UI styling |
-| Database | SQLite + aiosqlite | 0.19.0 | Local storage |
-| Auth | cryptography (RSA-PSS) | 42.0.0 | Kalshi API auth |
-| HTTP Client | httpx | 0.26.0 | Async HTTP |
-| Build Tool | Vite | 5.x | Frontend bundler |
-| WebSocket | FastAPI WebSocket | - | Real-time updates |
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| Backend | FastAPI | REST API + WebSocket |
+| Frontend | React + TypeScript | Web UI |
+| Database | SQLite + aiosqlite | Local persistence |
+| Auth | RSA-PSS (SHA-256) | Kalshi API signing |
+| HTTP | httpx | Async HTTP client |
 
-### Key Features
+### Trading Modes
 
-- **Dual Trading Modes**: Paper simulation (default) + Live trading
-- **Multiple Arbitrage Strategies**: BTC threshold/range, Weather brackets, Economic events
-- **Portfolio Management**: Position tracking, P&L analytics, order history
-- **Risk Management**: Kelly sizing, circuit breakers, position limits
-- **Real-time Scanning**: BTC (2s), Weather (30s) independent scanners
-- **Unified Trading Infrastructure**: Strategy orchestrator with signal management
+| Mode | Description | Status |
+|------|-------------|--------|
+| **Live** | Real Kalshi API trading | Active |
+| **Demo** | Simulated trading | Phase 2 |
+
+### Supported Markets
+
+- **Weather**: High/Low temperature brackets (6 cities)
+- **BTC**: Price threshold and range markets
 
 ---
 
-## ⚠️ Critical Constraints
+## 2. Critical Constraints
 
-### 🚫 Position Limitation (MOST IMPORTANT)
+### Position Limitation (MOST IMPORTANT)
 
 **Kalshi does NOT allow holding YES and NO on the same market simultaneously.**
 
-This constraint shapes ALL strategy code:
-
 ```python
-# ❌ INVALID - Cannot do this
-buy_yes("KXBTC-24DEC31-100000")
-buy_no("KXBTC-24DEC31-100000")  # Will fail!
+# INVALID - Will fail
+buy_yes("KXBTC-25JAN15-100000")
+buy_no("KXBTC-25JAN15-100000")  # ERROR!
 
-# ✅ VALID - Bracket arbitrage works
-buy_yes("KXBTC-24DEC31-100000-100499")  # Range market
-buy_no("KXBTC-24DEC31-100000")  # Threshold market (different ticker)
+# VALID - Different tickers
+buy_yes("KXBTC-25JAN15-100000-100499")  # Range market
+buy_no("KXBTCD-25JAN15-100000")         # Threshold market
 ```
 
-**Why this matters:**
-- Prevents simple "hedge both sides" strategies
-- Requires finding correlated markets with different tickers
-- Bracket arbitrage works because each bracket is a separate market
-- Must check existing positions before placing opposing trades
+### Rate Limits
 
-### Rate Limits by Tier
+| Tier | Limit | Use Case |
+|------|-------|----------|
+| Free | 10/sec | Scanning |
+| Standard | 30/sec | Live trading |
+| Premium | 100/sec | High-frequency |
 
-| Tier | Rate Limit | Notes |
-|------|------------|-------|
-| Free | 10 req/sec | Sufficient for scanning |
-| Standard | 30 req/sec | Recommended for live trading |
-| Premium | 100 req/sec | High-frequency strategies |
+### Ports
 
-**Implementation**: Exponential backoff on 429 errors (see `kalshi_client.py:70-78`)
-
-### Port Configuration
-
-| Service | Port | Notes |
-|---------|------|-------|
-| Backend | 8001 | FastAPI server |
-| Frontend (dev) | 5173 | Vite dev server |
-| Frontend (prod) | 80/443 | Static hosting |
+| Service | Port |
+|---------|------|
+| Backend | 8001 |
+| Frontend | 5173 |
 
 ---
 
-## Architecture
+## 3. Architecture
 
-### 4-Terminal Architecture
+### Single-Process Design
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Terminal 1    │    │   Terminal 2    │    │   Terminal 3    │
-│   Frontend      │◄──►│   Backend API   │◄──►│   Scanners      │
-│   React/Vite    │    │   FastAPI       │    │   BTC/Weather   │
-│   :5173         │    │   :8001         │    │   SQLite Write  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                             │                        │
-                             │                        ▼
-                             │                 ┌─────────────────┐
-                             │                 │ scanner_results │
-                             └────────────────►│    .db          │
-                                   (reads)     │                 │
-                                               └─────────────────┘
-                                                        │
-                        ┌───────────────────────────────┘
-                        ▼
-                 ┌─────────────────┐
-                 │   Terminal 4    │
-                 │   Log Viewer    │
-                 │   Colored logs  │
-                 └─────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                    FastAPI Backend                       │
+│  ┌─────────┐   ┌──────────┐   ┌───────────┐   ┌──────┐ │
+│  │ Scanner │──►│ Signal   │──►│ Execution │──►│ Pos  │ │
+│  │ Service │   │ Manager  │   │ Gateway   │   │ Mgr  │ │
+│  └─────────┘   └──────────┘   └───────────┘   └──────┘ │
+│       │              │              │              │     │
+│       └──────────────┴──────────────┴──────────────┘     │
+│                          │                               │
+│                    ┌─────▼─────┐                         │
+│                    │  SQLite   │                         │
+│                    └───────────┘                         │
+└─────────────────────────────────────────────────────────┘
+         ▲                                    │
+         │ REST/WS                            │ HTTP
+         │                                    ▼
+┌────────┴────────┐                  ┌────────────────┐
+│  React Frontend │                  │  Kalshi API    │
+└─────────────────┘                  └────────────────┘
 ```
 
-**Key Insight**: Scanners write to SQLite independently, API reads instantly (no blocking).
+### Signal Lifecycle
+
+```
+DETECTED → VALIDATED → EXECUTING → EXECUTED → SETTLED
+    │          │           │           │          │
+    │          │           │           │          └─ Final P&L recorded
+    │          │           │           └─ Position opened
+    │          │           └─ Orders placed with Kalshi
+    │          └─ Passes risk checks, has edge
+    └─ Scanner found opportunity
+```
 
 ### Data Flow
 
-1. **Scanners** (Terminal 3) continuously scan Kalshi API
-2. **Write** results to `scanner_results.db`
-3. **Backend** (Terminal 2) reads from database instantly
-4. **Frontend** (Terminal 1) polls backend every 30s
-5. **Logs** (Terminal 4) aggregate all service output
+1. **Scanner** detects arbitrage opportunity
+2. **SignalManager** validates edge and creates signal
+3. **RiskManager** checks limits, circuit breaker
+4. **ExecutionGateway** places orders via Kalshi API
+5. **PositionManager** tracks open positions
+6. **Settlement** resolves P&L at market close
 
 ---
 
-## API Reference
-
-### Base URLs
+## 4. File Structure
 
 ```
-Production (ALL markets): https://api.elections.kalshi.com/trade-api/v2
-WebSocket:                wss://api.elections.kalshi.com/trade-api/ws/v2
+kalshi-arb/
+├── backend/
+│   ├── main.py                 # FastAPI app entry
+│   ├── config.py               # Pydantic settings
+│   ├── exceptions.py           # Custom exceptions
+│   ├── api/
+│   │   ├── routes/
+│   │   │   ├── trading.py      # /execute, /positions
+│   │   │   ├── signals.py      # /signals, /opportunities
+│   │   │   ├── risk.py         # /circuit-breaker, /risk
+│   │   │   ├── weather.py      # /weather-arb/*
+│   │   │   └── btc.py          # /btc-arb/*
+│   │   ├── middleware.py       # Auth, rate limiting
+│   │   └── websocket/          # Phase 2
+│   ├── core/
+│   │   ├── client/
+│   │   │   ├── kalshi.py       # Kalshi REST client
+│   │   │   ├── auth.py         # RSA-PSS signing
+│   │   │   └── nws.py          # Weather forecast API
+│   │   ├── fees/
+│   │   │   └── calculator.py   # Single fee source
+│   │   ├── execution/
+│   │   │   ├── gateway.py      # Trade execution
+│   │   │   └── batch.py        # Multi-leg orders
+│   │   ├── positions/
+│   │   │   └── manager.py      # Position tracking
+│   │   └── risk/
+│   │       ├── circuit_breaker.py
+│   │       ├── limits.py
+│   │       └── manager.py
+│   ├── scanners/
+│   │   ├── base.py             # Scanner interface
+│   │   ├── weather/
+│   │   │   ├── scanner.py
+│   │   │   └── strategy.py
+│   │   └── btc/
+│   │       ├── scanner.py
+│   │       └── strategy.py
+│   ├── signals/
+│   │   ├── manager.py          # Signal lifecycle
+│   │   └── models.py           # Signal types
+│   ├── models/
+│   │   ├── market.py           # Market, Orderbook
+│   │   ├── execution.py        # ExecutionRequest/Result
+│   │   └── position.py         # Position, Trade
+│   └── database/
+│       ├── connection.py
+│       └── schema.sql
+├── frontend/
+│   └── src/
+│       ├── components/
+│       ├── services/api.ts
+│       └── stores/
+└── data/
+    └── kalshi.db
 ```
 
-⚠️ **Important**: Use `api.elections.kalshi.com` for ALL markets (not just elections). This is the unified endpoint.
+---
+
+## 5. API Reference
 
 ### Authentication
 
-**Method**: RSA-PSS signature with SHA-256
-
-**Headers Required**:
-```http
-KALSHI-ACCESS-KEY: <api_key_id>
-KALSHI-ACCESS-TIMESTAMP: <unix_timestamp_ms>
-KALSHI-ACCESS-SIGNATURE: <base64_signature>
-Content-Type: application/json
-```
-
-**Signature Process**:
-
 ```python
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+
 # 1. Create message
-timestamp = str(int(datetime.now(timezone.utc).timestamp() * 1000))
-path_without_query = "/trade-api/v2/markets"  # Strip ?params
-message = f"{timestamp}GET{path_without_query}"
+timestamp = str(int(time.time() * 1000))
+message = f"{timestamp}{method}{path}"  # e.g., "1234567890000GET/trade-api/v2/markets"
 
 # 2. Sign with RSA-PSS
 signature = private_key.sign(
     message.encode(),
     padding.PSS(
         mgf=padding.MGF1(hashes.SHA256()),
-        salt_length=padding.PSS.DIGEST_LENGTH  # ⚠️ DIGEST_LENGTH not MAX_LENGTH
+        salt_length=padding.PSS.DIGEST_LENGTH  # NOT MAX_LENGTH
     ),
     hashes.SHA256()
 )
 
-# 3. Base64 encode
-signature_b64 = base64.b64encode(signature).decode()
+# 3. Headers
+headers = {
+    "KALSHI-ACCESS-KEY": api_key_id,
+    "KALSHI-ACCESS-TIMESTAMP": timestamp,
+    "KALSHI-ACCESS-SIGNATURE": base64.b64encode(signature).decode()
+}
 ```
 
-**Common Auth Pitfalls**:
+### Endpoints (~30 total)
 
-❌ Using `PSS.MAX_LENGTH` → Use `PSS.DIGEST_LENGTH`
-❌ Including query params in signature → Strip them first
-❌ Wrong timestamp format → Must be milliseconds, not seconds
-❌ Lowercase method → Must be uppercase (GET not get)
+#### Trading
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | /execute | Execute arbitrage trade |
+| GET | /positions | Get open positions |
+| GET | /balance | Get account balance |
 
-### Key Endpoints
+#### Signals
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | /signals | List trading signals |
+| GET | /opportunities | Current arb opportunities |
+| GET | /signals/stats | Signal statistics |
 
-| Endpoint | Method | Auth | Purpose |
-|----------|--------|------|---------|
-| `/markets` | GET | Required | List markets with filters |
-| `/markets/{ticker}` | GET | Required | Single market details |
-| `/markets/{ticker}/orderbook` | GET | Required | Order book depth |
-| `/events` | GET | Required | Events with nested markets |
-| `/portfolio/balance` | GET | Required | Account balance |
-| `/portfolio/positions` | GET | Required | Current positions |
-| `/portfolio/orders` | POST | Required | Place single order |
-| `/portfolio/orders/batched` | POST | Required | Atomic multi-leg execution |
-| `/portfolio/fills` | GET | Required | Fill history |
+#### Risk
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | /circuit-breaker/status | CB state |
+| POST | /circuit-breaker/reset | Reset CB |
+| GET | /risk/status | Risk metrics |
 
-**Rate Limit Headers**:
-```http
-X-RateLimit-Limit: 10
-X-RateLimit-Remaining: 9
-X-RateLimit-Reset: 1234567890
-```
+#### Weather Arbitrage
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | /weather-arb/status | Scanner status |
+| GET | /weather-arb/city/{code} | City opportunities |
+
+#### BTC Arbitrage
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | /btc-arb/status | Scanner status |
+| POST | /btc-arb/execute/{id} | Execute opportunity |
+
+#### System
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | /health | Health check |
+| GET | /config | Current config |
 
 ---
 
-## Trading Strategies
+## 6. Trading Strategies
 
-### 1. Bracket Arbitrage (Mutually Exclusive Markets)
+### Bracket Arbitrage
 
-**Concept**: Buy all outcomes in a mutually exclusive set when total cost < guaranteed payout.
+**Concept**: Buy all outcomes in a mutually exclusive set when `total_cost < guaranteed_payout`.
 
-**Three Strategies**:
-
-#### All YES
-Buy YES on every bracket. Arbitrage if `sum(yes_ask) < 100¢`.
+#### Strategy 1: All YES
+Buy YES on every bracket. Profit if `sum(yes_ask) < 100¢`.
 
 ```python
-# Example: Temperature brackets (mutually exclusive)
-brackets = [
-    {"ticker": "KXHIGHNY-24DEC31-60-61", "yes_ask": 25},  # 25¢
-    {"ticker": "KXHIGHNY-24DEC31-61-62", "yes_ask": 30},  # 30¢
-    {"ticker": "KXHIGHNY-24DEC31-62-63", "yes_ask": 20},  # 20¢
-]
-total_cost = 75¢
-payout = 100¢ (exactly ONE will be YES)
-profit = 25¢ (before fees)
+# 4 weather brackets
+brackets = [25¢, 30¢, 20¢, 15¢]  # Total: 90¢
+payout = 100¢  # Exactly ONE will be YES
+profit = 10¢ - fees
 ```
 
-#### All NO
-Buy NO on every bracket. Arbitrage if `sum(no_ask) < (n-1) × 100¢`.
+#### Strategy 2: All NO
+Buy NO on every bracket. Profit if `sum(no_ask) < (n-1) × 100¢`.
 
 ```python
-# n=4 brackets, so (n-1) = 3 will pay out
-total_cost = 280¢
-payout = 3 × 100¢ = 300¢
-profit = 20¢
+# 4 brackets, (n-1)=3 will pay out
+no_asks = [75¢, 70¢, 80¢, 85¢]  # Total: 310¢
+payout = 300¢  # 3 NOs pay
+# No profit (310 > 300)
 ```
 
-#### Min 2-NO
-Buy 2 cheapest NOs. Arbitrage if `no1 + no2 < 100¢`.
+#### Strategy 3: Min 2-NO
+Buy 2 cheapest NOs. Profit if `no1 + no2 < 100¢`.
 
 ```python
-# Only works if exactly 1 outcome happens
-cheapest_nos = [35¢, 40¢]
-total_cost = 75¢
-payout = 100¢ (both NOs pay if neither bracket hits)
-profit = 25¢
+cheapest = [35¢, 40¢]  # Total: 75¢
+payout = 100¢  # Both pay if neither bracket wins
+profit = 25¢ - fees
 ```
 
-**Fee Calculation**:
+### Fee Calculation
 
 ```python
-# Kalshi fee: 7% × contracts × price × (1 - price)
-# Rounded up to nearest cent
+def calculate_fee(contracts: int, price_cents: int, rate: float = 0.07) -> int:
+    """
+    fee = ceil(rate × contracts × price × (1 - price))
 
-def calculate_fee(contracts: int, price_cents: int) -> int:
+    Example: 10 contracts at 60¢
+    fee = ceil(0.07 × 10 × 0.60 × 0.40 × 100) = ceil(16.8) = 17¢
+    """
     price = price_cents / 100.0
-    fee = 0.07 * contracts * price * (1 - price) * 100
-    return max(1, int(fee + 0.99))  # Round up
-
-# Example: 10 contracts at 60¢
-fee = 0.07 × 10 × 0.60 × 0.40 × 100 = 16.8¢ → 17¢
+    raw = rate * contracts * price * (1 - price) * 100
+    return max(1, math.ceil(raw))
 ```
 
-### 2. Weather Market Arbitrage
-
-**Coverage**: 7 cities × 2 types = 14 series
+### Weather Markets
 
 | City | High Series | Low Series |
 |------|-------------|------------|
@@ -280,390 +309,101 @@ fee = 0.07 × 10 × 0.60 × 0.40 × 100 = 16.8¢ → 17¢
 | Miami | KXHIGHMI | KXLOWMI |
 | Denver | KXHIGHDE | KXLOWDE |
 | Austin | KXHIGHAU | KXLOWAU |
-| Philadelphia | KXHIGHPH | KXLOWPH |
 
-**NWS Integration**: National Weather Service API provides 7-day forecasts with location-specific adjustments:
+**Settlement**: NWS official high/low temperature at midnight local time.
 
-```python
-# Location adjustments
-adjustments = {
-    "NYC": {
-        "urban_heat": +1.5,      # Urban heat island effect
-        "coastal_damping": 0.95   # Atlantic moderating influence
-    },
-    "DEN": {
-        "altitude": -3.0,         # Higher elevation = cooler
-        "dry_amplification": 1.1  # Dry air = larger swings
-    }
-}
-```
+### BTC Markets
 
-**Scan Frequency**: Every 30 seconds
-
-### 3. BTC Threshold/Range Arbitrage
-
-**Market Types**:
-- **KXBTC**: Range markets (e.g., $87,500-$87,749.99)
-- **KXBTCD**: Threshold markets (e.g., > $87,500)
-
-**Arbitrage Pattern**:
-
-```python
-# Buy YES on range, NO on both thresholds
-range_market = "KXBTC-24DEC31-87500-87749"   # YES at 40¢
-lower_threshold = "KXBTCD-24DEC31-87500"     # NO at 25¢
-upper_threshold = "KXBTCD-24DEC31-87750"     # YES at 30¢
-
-total_cost = 40 + 25 + 30 = 95¢
-payout = 100¢ (guaranteed)
-profit = 5¢ before fees
-```
-
-**Scan Frequency**: Every 2 seconds
+- **KXBTC**: Range markets (e.g., $100,000-$100,499)
+- **KXBTCD**: Threshold markets (e.g., ≥$100,000)
 
 ---
 
-## Data Models
+## 7. Database Schema (10 Tables)
 
-### Market Object (from Kalshi API)
+### Core Tables
 
-```python
-{
-    "ticker": "KXHIGHNY-24DEC31-60-61",
-    "title": "Will the high temperature in NYC be 60-61°F on Dec 31?",
-    "subtitle": "be 60-61°",  # Parsed for bracket bounds
-    "event_ticker": "KXHIGHNY-24DEC31",
-    "market_type": "binary",
-    "yes_ask": 35,  # Best YES ask price in cents
-    "yes_bid": 30,  # Best YES bid price in cents
-    "no_ask": 70,   # Best NO ask price in cents
-    "no_bid": 65,   # Best NO bid price in cents
-    "volume": 1250, # 24h volume
-    "open_interest": 450,
-    "settlement_time": "2024-12-31T23:59:00Z",
-    "floor_strike": 60,   # For bracket markets
-    "cap_strike": 61,     # For bracket markets
-    "status": "open"
-}
+```sql
+-- Signal tracking
+CREATE TABLE signals_v2 (
+    id TEXT PRIMARY KEY,
+    strategy_type TEXT NOT NULL,      -- 'weather', 'btc'
+    ticker TEXT NOT NULL,
+    edge_percent REAL NOT NULL,
+    status TEXT DEFAULT 'pending',    -- pending/executing/executed/settled
+    created_at TIMESTAMP NOT NULL,
+    executed_at TIMESTAMP,
+    settled_at TIMESTAMP
+);
+
+-- Execution audit trail
+CREATE TABLE execution_audit (
+    id TEXT PRIMARY KEY,
+    request_id TEXT UNIQUE NOT NULL,
+    source TEXT NOT NULL,             -- 'scanner', 'manual'
+    mode TEXT NOT NULL,               -- 'live', 'demo'
+    legs_json TEXT NOT NULL,
+    success INTEGER NOT NULL,
+    total_cost_cents INTEGER,
+    error TEXT
+);
+
+-- Risk management
+CREATE TABLE circuit_breaker_state (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    tripped INTEGER DEFAULT 0,
+    trip_reason TEXT,
+    consecutive_losses INTEGER DEFAULT 0,
+    daily_loss_cents INTEGER DEFAULT 0,
+    last_reset_date TEXT
+);
+
+-- Position tracking
+CREATE TABLE positions (
+    id TEXT PRIMARY KEY,
+    ticker TEXT NOT NULL,
+    side TEXT NOT NULL,
+    contracts INTEGER NOT NULL,
+    avg_price_cents INTEGER NOT NULL,
+    status TEXT DEFAULT 'open'
+);
+
+-- Trade records
+CREATE TABLE trade_records (
+    id TEXT PRIMARY KEY,
+    signal_id TEXT REFERENCES signals_v2(id),
+    ticker TEXT NOT NULL,
+    entry_price_cents INTEGER NOT NULL,
+    exit_price_cents INTEGER,
+    pnl_cents INTEGER,
+    status TEXT DEFAULT 'open'
+);
 ```
 
-### Order Request
+### Config Tables
 
-```python
-# Single order
-{
-    "ticker": "KXHIGHNY-24DEC31-60-61",
-    "client_order_id": "uuid-string",  # Optional
-    "side": "yes",  # or "no"
-    "action": "buy",  # or "sell"
-    "count": 10,
-    "type": "limit",
-    "yes_price": 35,  # Price in cents (1-99)
-    "expiration_ts": 1234567890000,  # Optional
-    "sell_position_floor": 0  # For sells only
-}
+```sql
+-- Risk limits
+CREATE TABLE risk_config (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    max_position_per_market INTEGER DEFAULT 100,
+    max_daily_loss_cents INTEGER DEFAULT 5000,
+    min_edge_percent REAL DEFAULT 3.0
+);
 
-# Batch orders (atomic execution)
-{
-    "orders": [
-        {"ticker": "...", "side": "yes", "action": "buy", ...},
-        {"ticker": "...", "side": "no", "action": "buy", ...}
-    ]
-}
-```
-
-### Fee Calculation Formula
-
-```python
-# Base fee
-fee = ceil(0.07 × contracts × price × (1 - price))
-
-# Maker discount (50% off for limit orders that provide liquidity)
-if is_maker:
-    fee = ceil(fee × 0.5)
-
-# Examples
-calc_fee(10, 50) = ceil(0.07 × 10 × 0.50 × 0.50) = 2¢
-calc_fee(10, 60) = ceil(0.07 × 10 × 0.60 × 0.40) = 2¢
-calc_fee(100, 30) = ceil(0.07 × 100 × 0.30 × 0.70) = 15¢
+-- Scanner config
+CREATE TABLE scanner_config (
+    scanner_type TEXT PRIMARY KEY,
+    enabled INTEGER DEFAULT 1,
+    scan_interval_seconds REAL DEFAULT 30.0
+);
 ```
 
 ---
 
-## Code Patterns
+## 8. Quick Commands
 
-### ✅ Correct Position Handling
-
-```python
-# Check existing positions before trading
-async def can_trade(ticker: str, side: str) -> bool:
-    positions = await kalshi_client.get_positions()
-    existing = next((p for p in positions if p["ticker"] == ticker), None)
-
-    if existing:
-        # Can't buy opposite side
-        if existing["side"] != side:
-            return False
-
-    return True
-
-# Safe trade execution
-if await can_trade(ticker, "yes"):
-    await place_order(ticker, "yes", "buy", contracts, price)
-else:
-    logger.warning(f"Cannot trade {ticker}: opposite position exists")
-```
-
-### ❌ Incorrect Patterns (Will Fail)
-
-```python
-# Don't do this - will violate position constraint
-await place_order("TICKER", "yes", "buy", 10, 50)
-await place_order("TICKER", "no", "buy", 10, 50)  # ❌ ERROR
-
-# Don't hedge same market
-positions = [{"ticker": "TICKER", "side": "yes", "contracts": 10}]
-await place_order("TICKER", "no", "buy", 10, 50)  # ❌ ERROR
-```
-
-### Safety-First Patterns
-
-#### Circuit Breaker
-
-```python
-class CircuitBreaker:
-    def __init__(self, max_consecutive_losses=5, cooldown_seconds=300):
-        self.consecutive_losses = 0
-        self.is_tripped = False
-        self.trip_time = None
-
-    def record_result(self, won: bool):
-        if won:
-            self.consecutive_losses = 0
-            self.is_tripped = False
-        else:
-            self.consecutive_losses += 1
-            if self.consecutive_losses >= self.max_consecutive_losses:
-                self.trip()
-
-    def can_trade(self) -> bool:
-        if self.is_tripped:
-            if time.time() - self.trip_time > self.cooldown_seconds:
-                self.reset()
-        return not self.is_tripped
-```
-
-#### Kelly Criterion Sizing
-
-```python
-def calculate_kelly_size(model_prob: float, market_price: float, bankroll: float) -> int:
-    """
-    Kelly Criterion: f = (p × odds - (1-p)) / odds
-
-    Where:
-    - p = model probability
-    - odds = (1 / market_price) - 1
-    """
-    if model_prob <= market_price:
-        return 0  # No edge
-
-    edge = model_prob - market_price
-    odds = (1 / market_price) - 1
-    kelly_fraction = (model_prob * odds - (1 - model_prob)) / odds
-
-    # Use 25% Kelly for safety (fractional Kelly)
-    kelly_fraction *= 0.25
-
-    # Calculate position size
-    position_value = bankroll * kelly_fraction
-    contracts = int(position_value / market_price)
-
-    # Apply limits
-    return min(contracts, 100)  # Max 100 contracts
-```
-
-#### Risk Manager
-
-```python
-class RiskManager:
-    def check_trade(self, ticker: str, contracts: int, price: float) -> bool:
-        # Position limits
-        if contracts > self.max_position_per_market:
-            return False
-
-        # Total exposure
-        total_positions = sum(p["contracts"] for p in self.positions.values())
-        if total_positions + contracts > self.max_total_position:
-            return False
-
-        # Daily loss limit
-        if self.daily_pnl < -self.max_daily_loss:
-            return False
-
-        # Single trade size
-        trade_value = contracts * price
-        if trade_value > self.max_single_trade:
-            return False
-
-        return True
-```
-
----
-
-## File Structure
-
-```
-kalshi-bc-arb/
-├── backend/
-│   ├── main.py                    # FastAPI entry point
-│   ├── config/
-│   │   ├── __init__.py           # Settings (Pydantic)
-│   │   ├── fees.py               # Fee calculations
-│   │   └── locations/            # Weather location configs
-│   ├── api/
-│   │   ├── routes.py             # REST endpoints
-│   │   └── websocket.py          # WebSocket manager
-│   ├── database/
-│   │   ├── connection.py         # SQLite async wrapper
-│   │   └── schema.sql            # Database schema
-│   ├── models/
-│   │   └── schemas.py            # Pydantic models
-│   ├── services/
-│   │   ├── kalshi_client.py      # Kalshi API client
-│   │   ├── spot_price_client.py  # BTC price (free APIs)
-│   │   ├── arbitrage_calculator.py
-│   │   ├── arbitrage_detector.py
-│   │   ├── market_classifier.py
-│   │   ├── fee_calculator.py
-│   │   ├── paper_trading.py      # Simulation engine
-│   │   ├── trade_executor.py     # Paper/live router
-│   │   ├── portfolio_service.py
-│   │   ├── watchlist_service.py
-│   │   ├── edge_detector.py
-│   │   ├── auto_trader.py
-│   │   ├── btc_arb_scanner.py
-│   │   ├── btc_arb_engine.py
-│   │   ├── weather_arb_scanner.py
-│   │   ├── scanner_service.py
-│   │   ├── scanner_db.py
-│   │   ├── nws_client.py         # Weather forecasts
-│   │   ├── log_config.py
-│   │   ├── log_viewer.py
-│   │   └── core/                 # Unified trading infrastructure
-│   │       ├── base_strategy.py
-│   │       ├── signal_manager.py
-│   │       ├── kelly_sizing.py
-│   │       ├── risk_manager.py
-│   │       ├── circuit_breaker.py
-│   │       ├── batch_executor.py
-│   │       ├── performance_tracker.py
-│   │       ├── alert_service.py
-│   │       ├── strategy_orchestrator.py
-│   │       └── backtest_engine.py
-│   └── utils/
-│       ├── kalshi_auth.py        # RSA-PSS signing
-│       └── logger.py
-├── frontend/
-│   ├── src/
-│   │   ├── main.tsx              # React entry
-│   │   ├── App.tsx               # Root component
-│   │   ├── components/
-│   │   │   ├── arbitrage/        # Arbitrage hub
-│   │   │   ├── portfolio/
-│   │   │   ├── trade/
-│   │   │   ├── watchlist/
-│   │   │   ├── autotrader/
-│   │   │   ├── analytics/
-│   │   │   ├── layout/
-│   │   │   └── common/
-│   │   ├── hooks/
-│   │   │   └── useSpotPrice.ts
-│   │   ├── services/
-│   │   │   └── api.ts            # Backend client
-│   │   ├── stores/
-│   │   │   ├── opportunityStore.ts
-│   │   │   └── tradingStore.ts
-│   │   ├── types/
-│   │   │   ├── index.ts
-│   │   │   └── weather.ts
-│   │   └── utils/
-│   │       └── format.ts
-│   ├── package.json
-│   └── vite.config.ts
-├── context/                       # AI assistant context
-│   ├── INDEX.md                  # File tree and modules
-│   ├── API.md                    # API reference
-│   └── SCHEMAS.md                # Data schemas
-├── run_scanners.py               # Scanner entry point
-├── run_logs.py                   # Log viewer entry point
-├── test_core_components.py       # Core tests
-├── start.bat                     # Launch all services
-├── stop.bat                      # Stop all services
-├── .env                          # Environment config
-├── README.md
-├── ARCHITECTURE.md               # 4-terminal architecture
-├── QUICKSTART.md
-└── CLAUDE.md                     # This file
-```
-
-### Key Entry Points
-
-| File | Command | Purpose |
-|------|---------|---------|
-| `backend/main.py` | `uvicorn backend.main:app --reload --port 8001` | Start API server |
-| `frontend/src/main.tsx` | `npm run dev` (in frontend/) | Start React dev server |
-| `run_scanners.py` | `python run_scanners.py` | Run BTC + Weather scanners |
-| `run_logs.py` | `python run_logs.py` | Start log viewer |
-| `start.bat` | `start.bat` | Launch all 4 terminals |
-| `test_core_components.py` | `python test_core_components.py` | Test core infrastructure |
-
----
-
-## Environment Variables
-
-### Required for Live Trading
-
-```bash
-KALSHI_API_KEY_ID=your-key-id-here
-KALSHI_PRIVATE_KEY_PATH=./keys/kalshi-private-key.pem
-PAPER_TRADING_MODE=false  # WARNING: Real money!
-```
-
-### Optional Configuration
-
-```bash
-# API Base URL (default shown)
-KALSHI_BASE_URL=https://api.elections.kalshi.com/trade-api/v2
-KALSHI_WS_URL=wss://api.elections.kalshi.com/trade-api/ws/v2
-
-# Paper Trading (default: True)
-PAPER_TRADING_MODE=true
-PAPER_STARTING_BALANCE=10000.00
-INITIAL_PAPER_BALANCE=1000000  # In cents
-
-# Scanner Settings
-BTC_SCAN_INTERVAL=2.0           # Seconds
-WEATHER_SCAN_INTERVAL=30.0      # Seconds
-
-# Database Paths
-DATABASE_PATH=./data/kalshi.db
-SCANNER_DB_PATH=./data/scanner_results.db
-
-# Logging
-LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
-```
-
-### No Configuration Needed
-
-- **BTC Spot Price**: Uses free APIs (CoinGecko, CoinLore)
-- **Weather Forecasts**: NWS API is free and public
-- **Frontend**: Automatically connects to localhost:8001
-
----
-
-## Quick Commands
-
-### First Time Setup
+### Setup
 
 ```bash
 # Backend
@@ -676,246 +416,83 @@ pip install -r requirements.txt
 cd frontend
 npm install
 
-# Create .env
+# Environment
 cp .env.example .env
-# Edit .env with your Kalshi credentials
+# Edit .env with Kalshi credentials
 ```
 
-### Start Platform (4 Terminals)
+### Start (2 Terminals)
 
 ```bash
-# Option 1: All at once (Windows)
-start.bat
+# Terminal 1: Backend
+uvicorn backend.main:app --reload --port 8001
 
-# Option 2: Manual (cross-platform)
-# Terminal 1
+# Terminal 2: Frontend
 cd frontend && npm run dev
-
-# Terminal 2
-cd backend && uvicorn main:app --reload --port 8001
-
-# Terminal 3
-python run_scanners.py
-
-# Terminal 4
-python run_logs.py
 ```
 
-### Stop Platform
+### Common Operations
 
 ```bash
-# Option 1: Close launcher terminal
-# Option 2: Manual
-stop.bat
-
-# Option 3: Kill processes
-# Windows
-taskkill /IM node.exe /F
-taskkill /IM python.exe /F
-
-# Linux/Mac
-pkill -f "npm run dev"
-pkill -f "uvicorn"
-pkill -f "run_scanners"
-pkill -f "run_logs"
-```
-
-### Development Commands
-
-```bash
-# Backend tests
-python test_core_components.py
-
-# Frontend dev
-cd frontend
-npm run dev          # Dev server
-npm run build        # Production build
-npm run preview      # Preview build
-
-# Linting
-cd frontend
-npm run lint
-
-# Check API
+# Health check
 curl http://localhost:8001/health
-curl http://localhost:8001/scanners/status
 
-# View logs
-python run_logs.py --source weather --level INFO
-python run_logs.py --file errors
-tail -f logs/kalshi.log
-```
+# View opportunities
+curl http://localhost:8001/opportunities
 
-### Database Operations
+# Check circuit breaker
+curl http://localhost:8001/circuit-breaker/status
 
-```bash
-# View scanner results
-sqlite3 data/scanner_results.db
-> SELECT * FROM scanner_results;
-> SELECT * FROM scanner_stats;
-
-# View trading data
-sqlite3 data/kalshi.db
-> SELECT * FROM paper_account;
-> SELECT * FROM paper_positions WHERE settled = 0;
-> SELECT * FROM paper_trades ORDER BY executed_at DESC LIMIT 10;
+# Execute trade (POST)
+curl -X POST http://localhost:8001/execute \
+  -H "Content-Type: application/json" \
+  -d '{"signal_id": "abc123"}'
 ```
 
 ---
 
-## Testing Strategy
+## 9. Known Issues / Deferred
 
-### Testing Philosophy
+### Deferred to Phase 2
 
-**Safety First**: Test with paper trading before ANY live changes.
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Paper/Demo mode | Deferred | Live mode only for now |
+| Backtesting engine | Deferred | Use historical data manually |
+| Alert service | Deferred | Check logs for now |
+| WebSocket streaming | Deferred | Use REST polling |
 
-### Test Levels
+### Phase 2 Roadmap
 
-#### 1. Unit Tests
+- [ ] WebSocket real-time updates
+- [ ] Demo mode with simulated fills
+- [ ] Additional markets (economic events)
+- [ ] Mobile-responsive UI
+- [ ] Performance dashboard
 
-```bash
-# Test core components
-python test_core_components.py
+### Active Bugs to Fix
 
-# Test specific modules
-python -m pytest backend/services/test_*.py
-```
+| Bug | Location | Priority |
+|-----|----------|----------|
+| Fee not in weather edge calc | `scanners/weather/strategy.py` | P0 |
+| No partial fill rollback | `core/execution/batch.py` | P0 |
+| Cache stale on partial | `core/execution/gateway.py` | P1 |
 
-**Key Tests**:
-- Fee calculations (must match Kalshi exactly)
-- Arbitrage detection (all three strategies)
-- Position constraint validation
-- Kelly sizing calculations
-- Circuit breaker logic
+---
 
-#### 2. Integration Tests
-
-```bash
-# Start backend in test mode
-PAPER_TRADING_MODE=true uvicorn backend.main:app
-
-# Test endpoints
-curl http://localhost:8001/opportunities?min_profit=1.0
-curl http://localhost:8001/btc-arb/status
-curl http://localhost:8001/weather-arb/status
-```
-
-#### 3. Scanner Tests
+## Environment Variables
 
 ```bash
-# Run scanners once
-python run_scanners.py
+# Required
+KALSHI_API_KEY_ID=your-key-id
+KALSHI_PRIVATE_KEY_PATH=./keys/private.pem
 
-# Check database
-sqlite3 data/scanner_results.db "SELECT * FROM scanner_results"
-
-# Verify calculations
-python -c "from backend.services.btc_arb_scanner import BTCArbitrageScanner; \
-           scanner = BTCArbitrageScanner(...); \
-           result = await scanner.scan()"
-```
-
-#### 4. Paper Trading Tests
-
-**Workflow**:
-
-1. Enable paper mode: `PAPER_TRADING_MODE=true`
-2. Reset paper account: `curl -X POST http://localhost:8001/paper/reset`
-3. Execute trades via UI or API
-4. Monitor positions: `curl http://localhost:8001/positions`
-5. Check P&L: `curl http://localhost:8001/paper/summary`
-6. Review logs: `tail -f logs/trades.log`
-
-#### 5. Live Trading Tests (Use Caution!)
-
-⚠️ **WARNING**: Real money! Test thoroughly in paper mode first.
-
-```bash
-# 1. Set conservative limits in .env
-MAX_POSITION_PER_MARKET=10  # Small position
-MAX_DAILY_LOSS_CENTS=1000   # $10 max loss
-CIRCUIT_BREAKER_MAX_LOSSES=2  # Trip quickly
-
-# 2. Enable live mode
-PAPER_TRADING_MODE=false
-
-# 3. Start with manual execution only
-# Don't enable auto-trading until proven
-
-# 4. Place ONE test trade
-# Monitor closely
-
-# 5. Verify fill and position
-curl http://localhost:8001/positions
-
-# 6. Check fees match calculation
-curl http://localhost:8001/portfolio/fills
-```
-
-### Common Test Scenarios
-
-#### Test Bracket Arbitrage
-
-```python
-# Simulate mutually exclusive brackets
-brackets = [
-    {"ticker": "A", "yes_ask": 25, "no_ask": 80},
-    {"ticker": "B", "yes_ask": 30, "no_ask": 75},
-    {"ticker": "C", "yes_ask": 20, "no_ask": 85},
-]
-
-# All YES: 25 + 30 + 20 = 75¢ (arb! profit = 25¢ - fees)
-# All NO: 80 + 75 + 85 = 240¢ (no arb, need < 200¢)
-# Min 2-NO: 75 + 80 = 155¢ (no arb, need < 100¢)
-```
-
-#### Test Position Constraint
-
-```python
-# Should fail
-await place_order("TICKER", "yes", "buy", 10, 50)
-await place_order("TICKER", "no", "buy", 10, 50)  # ERROR
-
-# Should succeed
-await place_order("TICKER-A", "yes", "buy", 10, 50)
-await place_order("TICKER-B", "no", "buy", 10, 50)  # OK (different ticker)
-```
-
-#### Test Fee Calculation
-
-```python
-# Verify fees match Kalshi
-assert calculate_fee(10, 50) == 2  # ceil(0.07 × 10 × 0.5 × 0.5) = 2
-assert calculate_fee(100, 60) == 17  # ceil(0.07 × 100 × 0.6 × 0.4) = 17
+# Optional
+KALSHI_BASE_URL=https://api.elections.kalshi.com/trade-api/v2
+LOG_LEVEL=INFO
+DATABASE_PATH=./data/kalshi.db
 ```
 
 ---
 
-## Additional Resources
-
-### Context Documentation
-
-For comprehensive codebase documentation, see:
-
-- **[context/INDEX.md](context/INDEX.md)** - Complete file tree and module descriptions
-- **[context/API.md](context/API.md)** - Full API reference for all functions/classes
-- **[context/SCHEMAS.md](context/SCHEMAS.md)** - Database schemas and data models
-
-### External Documentation
-
-- [Kalshi API Docs](https://docs.kalshi.com/) - Official API reference
-- [Kalshi Markets](https://kalshi.com/markets) - Browse available markets
-- [NWS API](https://www.weather.gov/documentation/services-web-api) - Weather forecast API
-
----
-
-## Version History
-
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.0 | 2024-01-09 | Initial comprehensive documentation |
-
----
-
-**Last Updated**: 2024-01-09
-**Maintained By**: AI Development Team
+*Last Updated: 2026-01-15*
